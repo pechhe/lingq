@@ -54,7 +54,7 @@
 		position: relative;
 		display: block;
 		width: 100%;
-		min-height: 7.5rem;
+		min-height: clamp(11rem, 38vh, 22rem);
 		padding: 0;
 		border: 0;
 		border-radius: 1.1rem;
@@ -89,9 +89,9 @@
 	}
 
 	.label {
-		font-size: clamp(1rem, 4vw, 1.25rem);
+		font-size: clamp(1.1rem, 5vw, 1.6rem);
 		font-weight: 700;
-		letter-spacing: 0.16em;
+		letter-spacing: 0.18em;
 	}
 
 	.ptt-glow {
