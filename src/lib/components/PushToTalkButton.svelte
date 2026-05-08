@@ -33,34 +33,49 @@
 	}
 </script>
 
-<button
-	class="ptt"
-	class:active
-	{disabled}
-	aria-pressed={active}
-	onpointerdown={begin}
-	onpointerup={end}
-	onpointercancel={end}
->
-	<span class="ptt-grain" aria-hidden="true"></span>
-	<span class="ptt-sheen" aria-hidden="true"></span>
-	<span class="ptt-inner">
-		<span class="ptt-icon" aria-hidden="true">
-			<Mic size={64} strokeWidth={2.2} />
+<div class="ptt-mount">
+	<button
+		class="ptt"
+		class:active
+		{disabled}
+		aria-pressed={active}
+		onpointerdown={begin}
+		onpointerup={end}
+		onpointercancel={end}
+	>
+		<span class="ptt-grain" aria-hidden="true"></span>
+		<span class="ptt-sheen" aria-hidden="true"></span>
+		<span class="ptt-inner">
+			<span class="ptt-icon" aria-hidden="true">
+				<Mic size={64} strokeWidth={2.2} />
+			</span>
+			<span class="label">{active ? 'TRANSMITTING' : 'HOLD TO TALK'}</span>
 		</span>
-		<span class="label">{active ? 'TRANSMITTING' : 'HOLD TO TALK'}</span>
-	</span>
-</button>
+	</button>
+</div>
 
 <style>
+	.ptt-mount {
+		display: flex;
+		width: 100%;
+		padding: 2px 4px 4px 2px;
+		border-radius: 1.28rem;
+		background: linear-gradient(135deg, oklch(0.04 0.005 250) 0%, oklch(0.07 0.005 250) 100%);
+		box-shadow:
+			inset 1px 1px 3px oklch(0 0 0 / 0.85),
+			inset -1px -1px 1px oklch(0.32 0.005 250 / 0.22),
+			inset 0 0 0 1px oklch(0 0 0 / 0.55);
+	}
+
 	.ptt {
 		position: relative;
 		display: block;
+		flex: 1;
 		width: 100%;
 		min-height: clamp(11rem, 38vh, 22rem);
 		padding: 0;
 		border: 0;
-		border-radius: 1.2rem;
+		border-radius: 1.15rem;
 		color: oklch(0.18 0.05 50);
 		background:
 			repeating-linear-gradient(
@@ -71,22 +86,22 @@
 				transparent 3px
 			),
 			linear-gradient(
-				180deg,
-				oklch(0.86 0.16 65) 0%,
-				oklch(0.78 0.18 60) 22%,
-				oklch(0.65 0.21 55) 60%,
-				oklch(0.5 0.21 50) 100%
+				145deg,
+				oklch(0.88 0.15 65) 0%,
+				oklch(0.78 0.18 60) 28%,
+				oklch(0.62 0.21 55) 65%,
+				oklch(0.48 0.21 50) 100%
 			);
 		box-shadow:
-			inset 0 4px 0 -1px oklch(0.98 0.06 75 / 0.95),
-			inset 0 8px 12px -6px oklch(1 0.05 70 / 0.7),
-			inset 0 -5px 0 -1px oklch(0.32 0.12 50 / 0.95),
+			inset 1px 1px 0 oklch(0.98 0.08 70 / 0.9),
+			inset 0 4px 0 -1px oklch(0.96 0.08 70 / 0.85),
+			inset 0 8px 14px -6px oklch(1 0.05 70 / 0.6),
+			inset -1px -1px 0 oklch(0.3 0.12 50 / 0.7),
+			inset 0 -4px 0 -1px oklch(0.3 0.12 50 / 0.85),
 			inset 0 -10px 14px -6px oklch(0.22 0.1 50 / 0.55),
 			inset 0 0 0 1px oklch(0.5 0.18 50 / 0.85),
-			0 8px 0 -2px oklch(0.32 0.12 50),
-			0 14px 0 -4px oklch(0.22 0.1 50),
-			0 22px 36px -10px oklch(0 0 0 / 0.7),
-			0 0 36px oklch(0.7 0.18 55 / 0.28);
+			0 1px 2px oklch(0 0 0 / 0.4),
+			0 0 28px oklch(0.7 0.18 55 / 0.22);
 		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
 		touch-action: none;
 		user-select: none;
@@ -162,7 +177,7 @@
 	}
 
 	.ptt.active {
-		transform: translateY(8px);
+		transform: translate(0.5px, 3px);
 		background:
 			repeating-linear-gradient(
 				90deg,
@@ -172,18 +187,18 @@
 				transparent 3px
 			),
 			linear-gradient(
-				180deg,
+				145deg,
 				oklch(0.7 0.18 55) 0%,
 				oklch(0.6 0.2 52) 50%,
 				oklch(0.45 0.21 48) 100%
 			);
 		box-shadow:
-			inset 0 4px 8px oklch(0 0 0 / 0.6),
-			inset 0 -2px 0 oklch(0.5 0.16 55 / 0.4),
+			inset 1px 1px 4px oklch(0 0 0 / 0.55),
+			inset 0 4px 8px oklch(0 0 0 / 0.5),
+			inset -1px -1px 0 oklch(0.5 0.16 55 / 0.3),
 			inset 0 0 0 1px oklch(0.42 0.16 50 / 0.85),
-			0 2px 0 -1px oklch(0.32 0.12 50),
-			0 6px 14px -4px oklch(0 0 0 / 0.55),
-			0 0 48px oklch(0.78 0.21 55 / 0.55);
+			0 0 0 oklch(0 0 0 / 0),
+			0 0 36px oklch(0.78 0.21 55 / 0.5);
 	}
 
 	.ptt.active .ptt-sheen {

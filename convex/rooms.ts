@@ -40,7 +40,7 @@ export const create = mutation({
 			status: 'open' as const,
 			creatorSpokenLanguage: args.spokenLanguage,
 			creatorHearLanguage: args.hearLanguage,
-			maxParticipants: 2
+			maxParticipants: 12
 		};
 
 		await ctx.db.insert('rooms', room);
@@ -64,7 +64,7 @@ export const get = query({
 		const participants = await ctx.db
 			.query('participants')
 			.withIndex('by_roomId', (q) => q.eq('roomId', args.roomId))
-			.take(10);
+			.take(50);
 
 		return { room, participants };
 	}
@@ -118,18 +118,17 @@ export const join = mutation({
 			await ctx.db
 				.query('participants')
 				.withIndex('by_roomId', (q) => q.eq('roomId', args.roomId))
-				.take(10)
+				.take(50)
 		).filter((participant) => participant.status === 'active');
 
 		if (activeParticipants.length >= room.maxParticipants) {
 			throw new Error('Room is full');
 		}
 
-		const side = activeParticipants.some((participant) => participant.side === 'A') ? 'B' : 'A';
 		const participant = {
 			roomId: args.roomId,
 			participantId: createParticipantId(),
-			side: side as 'A' | 'B',
+			side: `P${activeParticipants.length + 1}`,
 			spokenLanguage: args.spokenLanguage,
 			hearLanguage: args.hearLanguage,
 			joinedAt: now,
@@ -144,7 +143,11 @@ export const join = mutation({
 		});
 
 		return {
-			room: { ...room, status: participant.side === 'B' ? ('full' as const) : room.status },
+			room: {
+				...room,
+				status:
+					activeParticipants.length + 1 >= room.maxParticipants ? ('full' as const) : room.status
+			},
 			participant
 		};
 	}

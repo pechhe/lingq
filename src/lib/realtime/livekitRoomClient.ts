@@ -17,6 +17,12 @@ export type LiveKitRoomClientOptions = {
 	participantId: string;
 	onParticipantCount?: (count: number) => void;
 	onRemoteMicrophone?: (track: MediaStreamTrack, publication: RemoteTrackPublication) => void;
+	onRemoteTranslation?: (input: {
+		track: MediaStreamTrack;
+		publication: RemoteTrackPublication;
+		sourceParticipantId: string;
+		targetLanguage: string;
+	}) => void;
 	onRemoteMicrophoneMuted?: () => void;
 	onRemoteMicrophoneUnmuted?: (publication: TrackPublication) => void;
 	onStatus?: (status: string) => void;
@@ -28,6 +34,7 @@ export class LiveKitRoomClient {
 	#options: LiveKitRoomClientOptions;
 	#publishedMicrophoneTrack?: MediaStreamTrack;
 	#publishedMicrophone?: LocalTrackPublication;
+	#publishedTranslationTracks = new Map<string, MediaStreamTrack>();
 
 	constructor(options: LiveKitRoomClientOptions) {
 		this.#options = options;
@@ -83,12 +90,39 @@ export class LiveKitRoomClient {
 		}
 	}
 
+	async publishTranslationTrack(
+		stream: MediaStream,
+		input: { sourceParticipantId: string; targetLanguage: string }
+	) {
+		const [track] = stream.getAudioTracks();
+		if (!track) return;
+
+		const name = createTranslationTrackName(input.sourceParticipantId, input.targetLanguage);
+		this.unpublishTranslationTrack(input.targetLanguage);
+		this.#publishedTranslationTracks.set(input.targetLanguage, track);
+		await this.#room.localParticipant.publishTrack(track, {
+			name
+		});
+	}
+
+	unpublishTranslationTrack(targetLanguage: string) {
+		const track = this.#publishedTranslationTracks.get(targetLanguage);
+		if (!track) return;
+
+		this.#room.localParticipant.unpublishTrack(track);
+		this.#publishedTranslationTracks.delete(targetLanguage);
+	}
+
 	disconnect() {
 		if (this.#publishedMicrophoneTrack) {
 			this.#room.localParticipant.unpublishTrack(this.#publishedMicrophoneTrack);
 			this.#publishedMicrophoneTrack = undefined;
 			this.#publishedMicrophone = undefined;
 		}
+		for (const track of this.#publishedTranslationTracks.values()) {
+			this.#room.localParticipant.unpublishTrack(track);
+		}
+		this.#publishedTranslationTracks.clear();
 		this.#room.disconnect();
 	}
 
@@ -102,6 +136,16 @@ export class LiveKitRoomClient {
 					track.kind !== Track.Kind.Audio ||
 					participant.identity === this.#options.participantId
 				) {
+					return;
+				}
+
+				const translation = parseTranslationTrackName(publication.trackName);
+				if (translation) {
+					this.#options.onRemoteTranslation?.({
+						track: (track as RemoteAudioTrack).mediaStreamTrack,
+						publication,
+						...translation
+					});
 					return;
 				}
 
@@ -149,4 +193,15 @@ export class LiveKitRoomClient {
 	#emitParticipantCount() {
 		this.#options.onParticipantCount?.(this.#room.remoteParticipants.size + 1);
 	}
+}
+
+function createTranslationTrackName(sourceParticipantId: string, targetLanguage: string) {
+	return `translation:${sourceParticipantId}:${targetLanguage}`;
+}
+
+function parseTranslationTrackName(trackName: string) {
+	const [kind, sourceParticipantId, targetLanguage] = trackName.split(':');
+	if (kind !== 'translation' || !sourceParticipantId || !targetLanguage) return null;
+
+	return { sourceParticipantId, targetLanguage };
 }

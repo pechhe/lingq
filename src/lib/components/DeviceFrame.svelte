@@ -65,6 +65,13 @@
 			clamp(0.5rem, 2vw, 1.5rem) calc(env(safe-area-inset-bottom, 0px) + clamp(0.5rem, 2vw, 1.5rem));
 	}
 
+	@media (min-width: 26rem) {
+		.stage {
+			padding-left: clamp(1.5rem, 3vw, 2.25rem);
+			padding-right: clamp(0.5rem, 2vw, 1.5rem);
+		}
+	}
+
 	.device {
 		position: relative;
 		display: flex;
@@ -75,7 +82,6 @@
 		flex: 1;
 		min-height: 0;
 		padding: clamp(0.85rem, 3vw, 1.2rem) clamp(0.85rem, 3vw, 1.2rem) clamp(0.7rem, 2.5vw, 0.95rem);
-		padding-left: clamp(2.2rem, 7vw, 2.8rem);
 		border-radius: clamp(1.6rem, 4vw, 2.4rem);
 		background: linear-gradient(
 			180deg,
@@ -85,11 +91,13 @@
 		);
 		box-shadow:
 			0 1px 0 var(--device-edge-highlight) inset,
+			1px 0 0 oklch(0.48 0.006 250 / 0.75) inset,
+			-1px 0 0 oklch(0.08 0 0 / 0.75) inset,
 			0 -1px 0 oklch(0.06 0 0) inset,
 			0 0 0 1px oklch(0.32 0.005 250 / 0.5),
 			0 30px 80px -20px oklch(0 0 0 / 0.85),
 			0 8px 20px -8px oklch(0 0 0 / 0.6);
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.device::before {
@@ -97,6 +105,7 @@
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
+		border-radius: inherit;
 		background: radial-gradient(
 			ellipse at 30% -10%,
 			oklch(0.32 0.006 250 / 0.55) 0%,
@@ -109,6 +118,7 @@
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
+		border-radius: inherit;
 		background: repeating-linear-gradient(
 			90deg,
 			oklch(1 0 0 / 0.012) 0px,
@@ -121,33 +131,62 @@
 
 	.rail {
 		position: absolute;
-		left: clamp(0.5rem, 1.6vw, 0.8rem);
-		top: clamp(2.4rem, 7vw, 3.2rem);
+		left: clamp(-0.34rem, -0.82vw, -0.24rem);
+		top: clamp(3.2rem, 8vw, 4.5rem);
 		display: flex;
 		flex-direction: column;
-		gap: clamp(0.85rem, 2.5vw, 1.4rem);
+		gap: clamp(0.9rem, 2.4vw, 1.45rem);
 		pointer-events: none;
 		z-index: 3;
 	}
 
 	.rail-button {
+		position: relative;
 		display: block;
-		width: clamp(0.5rem, 1.4vw, 0.7rem);
-		height: clamp(1.4rem, 3.5vw, 1.8rem);
-		border-radius: 0.2rem;
-		background: linear-gradient(180deg, oklch(0.36 0.006 250) 0%, oklch(0.22 0.006 250) 100%);
+		width: clamp(0.3rem, 0.78vw, 0.4rem);
+		height: clamp(1.8rem, 4.4vw, 2.35rem);
+		border-radius: 0.28rem 0.07rem 0.07rem 0.28rem;
+		background: linear-gradient(
+			180deg,
+			oklch(0.34 0.004 250) 0%,
+			oklch(0.27 0.004 250) 20%,
+			oklch(0.2 0.004 250) 100%
+		);
 		box-shadow:
-			inset 0 1px 0 oklch(0.5 0.006 250 / 0.5),
-			inset 0 -1px 0 oklch(0 0 0 / 0.5),
-			-1px 0 2px oklch(0 0 0 / 0.4);
+			inset 1px 0 0 oklch(0.5 0.005 250 / 0.32),
+			inset 0 1px 0 oklch(0.5 0.005 250 / 0.48),
+			inset 0 -2px 0 oklch(0.03 0 0 / 0.75),
+			-1px 0 0 oklch(0.5 0.005 250 / 0.25),
+			0 3px 5px -4px oklch(0 0 0 / 0.9),
+			-2px 4px 7px -6px oklch(0 0 0 / 0.82);
+	}
+
+	.rail-button::after {
+		content: '';
+		position: absolute;
+		top: 0.2rem;
+		right: -1px;
+		bottom: 0.18rem;
+		width: 1px;
+		background: oklch(0.08 0 0 / 0.65);
 	}
 
 	.rail-button--orange {
-		background: linear-gradient(180deg, var(--led-orange-glow) 0%, oklch(0.55 0.18 55) 100%);
+		background: linear-gradient(
+			180deg,
+			oklch(0.86 0.11 70) 0%,
+			oklch(0.7 0.18 58) 18%,
+			oklch(0.58 0.2 52) 66%,
+			oklch(0.45 0.18 46) 100%
+		);
 		box-shadow:
-			inset 0 1px 0 oklch(0.92 0.12 70 / 0.7),
-			inset 0 -1px 0 oklch(0.3 0.1 50 / 0.6),
-			-1px 0 4px oklch(0.55 0.18 55 / 0.45);
+			inset 1px 0 0 oklch(0.96 0.08 76 / 0.58),
+			inset 0 1px 0 oklch(0.96 0.08 76 / 0.68),
+			inset 0 -2px 0 oklch(0.3 0.12 45 / 0.8),
+			-1px 0 0 oklch(0.96 0.08 76 / 0.45),
+			0 3px 5px -4px oklch(0.26 0.09 45 / 0.86),
+			-3px 5px 10px -7px oklch(0.52 0.19 52 / 0.45),
+			-7px 0 18px -12px oklch(0.6 0.2 52 / 0.35);
 	}
 
 	.device-top {

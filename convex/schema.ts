@@ -14,7 +14,7 @@ export default defineSchema({
 	participants: defineTable({
 		roomId: v.string(),
 		participantId: v.string(),
-		side: v.union(v.literal('A'), v.literal('B')),
+		side: v.string(),
 		spokenLanguage: v.string(),
 		hearLanguage: v.string(),
 		joinedAt: v.number(),

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { SvelteMap } from 'svelte/reactivity';
 	import AudioDevicePicker from '$lib/components/AudioDevicePicker.svelte';
 	import AudioVisualizer from '$lib/components/AudioVisualizer.svelte';
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
@@ -49,7 +50,10 @@
 	let remoteAudioElement = $state<HTMLAudioElement>();
 	let audioPickerOpen = $state(false);
 	let micPickerOpen = $state(false);
-	let remoteMicrophoneTrackId = '';
+	let activeParticipants = $state<
+		Array<{ participantId: string; status: string; spokenLanguage: string; hearLanguage: string }>
+	>([]);
+	let incomingTranslationTrackId = '';
 	let joinUrl = $state('');
 	let qrCopied = $state(false);
 	let latencyMarks = $state<Record<string, number>>({});
@@ -57,8 +61,11 @@
 	let micStream = $state<MediaStream | undefined>(undefined);
 	let remoteMicrophoneTrack: MediaStreamTrack | undefined;
 	let livekitClient: LiveKitRoomClient | undefined;
-	let openaiClient: OpenAIRealtimeClient | undefined;
+	let directTranslationClient: OpenAIRealtimeClient | undefined;
+	let outgoingTranslationClients = new SvelteMap<string, OpenAIRealtimeClient>();
+	let directRemoteMicrophoneTrackId = '';
 	let idleDisconnectTimer: ReturnType<typeof setTimeout> | undefined;
+	let participantPollTimer: ReturnType<typeof setInterval> | undefined;
 	let latencyTraceId = '';
 	let latencyFlushTimer: ReturnType<typeof setTimeout> | undefined;
 	let latencyEventBuffer: Array<{ name: string; elapsedMs: number; at: number }> = [];
@@ -185,35 +192,68 @@
 			participantId,
 			onParticipantCount: (count) => {
 				participantCount = count;
-				if (count < 2 && uiState === 'connected') {
-					disconnectTranslationSession();
+				if (count === 2) {
+					disconnectAllOutgoingTranslations();
+				} else if (count > 2) {
+					disconnectDirectTranslation();
+				}
+				if (count < 2 && (uiState === 'connected' || uiState === 'speaking')) {
+					disconnectAllTranslationSessions();
 					uiState = 'waiting_for_other_participant';
-					detail = 'Waiting for the other phone to connect.';
+					detail = 'Waiting for another phone to connect.';
 				} else if (count > 1 && uiState === 'waiting_for_other_participant') {
 					uiState = 'connected';
-					detail = 'Hold the button while speaking. The other phone hears the translation.';
+					detail = 'Hold the button while speaking. Other languages hear the translation.';
 				}
 			},
 			onRemoteMicrophone: (track, publication) => {
 				remoteMicrophoneTrack = track;
 				if (!paused && participantCount > 1 && uiState === 'waiting_for_other_participant') {
 					uiState = 'connected';
-					detail = 'Hold the button while speaking. The other phone hears the translation.';
+					detail = 'Hold the button while speaking. Other languages hear the translation.';
 				}
-				if (!publication.isMuted) {
-					void connectTranslation(track);
+				if (participantCount === 2 && !publication.isMuted) {
+					void connectDirectTranslation(track);
 				}
+			},
+			onRemoteTranslation: ({
+				track,
+				publication,
+				sourceParticipantId,
+				targetLanguage: nextTarget
+			}) => {
+				if (
+					participantCount < 3 ||
+					sourceParticipantId === participantId ||
+					nextTarget !== targetLanguage ||
+					incomingTranslationTrackId === track.id
+				) {
+					return;
+				}
+
+				incomingTranslationTrackId = track.id;
+				translatedAudioStream = new MediaStream([track]);
+				if (publication.isMuted) return;
+				uiState = uiState === 'speaking' ? 'speaking' : 'receiving_translation';
+				detail = 'Receiving translated audio.';
 			},
 			onRemoteMicrophoneMuted: () => {
 				markLatency('livekit_remote_ptt_off');
-				scheduleIdleDisconnect();
+				if (participantCount === 2) {
+					scheduleIdleDisconnect();
+				}
 			},
 			onRemoteMicrophoneUnmuted: () => {
 				resetLatency('remote_speech');
 				markLatency('livekit_remote_ptt_on');
 				clearIdleDisconnectTimer();
-				if (!paused && !openaiClient && remoteMicrophoneTrack) {
-					void connectTranslation(remoteMicrophoneTrack);
+				if (
+					!paused &&
+					participantCount === 2 &&
+					!directTranslationClient &&
+					remoteMicrophoneTrack
+				) {
+					void connectDirectTranslation(remoteMicrophoneTrack);
 				}
 			},
 			onStatus: (status) => {
@@ -234,6 +274,7 @@
 		if (microphoneTrack) {
 			await livekitClient.publishMicrophoneTrack(microphoneTrack);
 		}
+		startParticipantPolling();
 	}
 
 	async function waitForOtherParticipant() {
@@ -259,21 +300,28 @@
 			await new Promise((resolvePoll) => setTimeout(resolvePoll, 1000));
 		}
 
-		detail = 'Still waiting for the other phone.';
+		detail = 'Still waiting for another phone.';
 	}
 
-	async function connectTranslation(sourceTrack: MediaStreamTrack) {
-		remoteMicrophoneTrack = sourceTrack;
-		if (!livekitClient || paused || remoteMicrophoneTrackId === sourceTrack.id) return;
+	async function connectDirectTranslation(sourceTrack: MediaStreamTrack) {
+		if (
+			!livekitClient ||
+			paused ||
+			participantCount !== 2 ||
+			directRemoteMicrophoneTrackId === sourceTrack.id
+		) {
+			return;
+		}
 
-		remoteMicrophoneTrackId = sourceTrack.id;
+		remoteMicrophoneTrack = sourceTrack;
+		directRemoteMicrophoneTrackId = sourceTrack.id;
 		clearIdleDisconnectTimer();
-		openaiClient?.disconnect();
+		directTranslationClient?.disconnect();
 		uiState = 'connecting_translation';
-		detail = `Connecting translation into ${getLanguageLabel(targetLanguage)}.`;
+		detail = `Connecting direct translation into ${getLanguageLabel(targetLanguage)}.`;
 		markLatency('translation_connect_requested');
 
-		openaiClient = new OpenAIRealtimeClient({
+		directTranslationClient = new OpenAIRealtimeClient({
 			roomId,
 			participantId,
 			targetLanguage,
@@ -301,30 +349,88 @@
 				error = nextError.message;
 				uiState = 'reconnecting';
 				detail = 'Translation connection dropped. Reconnecting.';
-				await openaiClient?.reconnect().catch((cause) => {
+				await directTranslationClient?.reconnect().catch((cause) => {
 					uiState = 'error';
 					error = cause instanceof Error ? cause.message : 'Could not reconnect translation.';
 				});
 			}
 		});
 
-		await openaiClient.connect();
+		await directTranslationClient.connect();
 		uiState = participantCount > 1 ? 'connected' : 'waiting_for_other_participant';
 		detail =
 			participantCount > 1
 				? 'Hold the button while speaking. The other phone hears the translation.'
-				: 'Waiting for the other phone to connect.';
+				: 'Waiting for another phone to connect.';
+	}
+
+	async function connectOutgoingTranslation(target: string, sourceTrack: MediaStreamTrack) {
+		if (!livekitClient || paused || participantCount < 3 || outgoingTranslationClients.has(target))
+			return;
+
+		clearIdleDisconnectTimer();
+		uiState = 'connecting_translation';
+		detail = `Connecting translation into ${getLanguageLabel(target)}.`;
+		markLatency('translation_connect_requested');
+
+		const client = new OpenAIRealtimeClient({
+			roomId,
+			participantId,
+			targetLanguage: target,
+			openAITranslationLanguage: getOpenAITranslationLanguage(target),
+			sourceTrack,
+			onMetric: (name) => markLatency(name),
+			onTranslatedAudio: async (stream) => {
+				markLatency('translated_audio_stream_ready');
+				await livekitClient?.publishTranslationTrack(stream, {
+					sourceParticipantId: participantId,
+					targetLanguage: target
+				});
+			},
+			onStatus: (status) => {
+				translationStatus = status;
+				if (
+					status === 'connected' &&
+					participantCount > 1 &&
+					uiState === 'connecting_translation'
+				) {
+					uiState = 'connected';
+					detail = 'Hold the button while speaking. Other languages hear the translation.';
+				}
+			},
+			onError: async (nextError) => {
+				error = nextError.message;
+				uiState = 'reconnecting';
+				detail = 'Translation connection dropped. Reconnecting.';
+				await client.reconnect().catch((cause) => {
+					uiState = 'error';
+					error = cause instanceof Error ? cause.message : 'Could not reconnect translation.';
+				});
+			}
+		});
+
+		outgoingTranslationClients.set(target, client);
+		await client.connect();
+		uiState = participantCount > 1 ? 'connected' : 'waiting_for_other_participant';
+		detail =
+			participantCount > 1
+				? 'Hold the button while speaking. Other languages hear the translation.'
+				: 'Waiting for another phone to connect.';
 	}
 
 	function startSpeaking() {
 		if (pushDisabled) return;
 		uiState = 'speaking';
-		detail = 'Speaking. The other phone will translate your voice.';
+		detail = 'Speaking. Other languages will hear one shared translation.';
 		livekitClient?.setMicrophoneEnabled(true);
+		if (participantCount > 2) {
+			void connectOutgoingTranslationsForCurrentListeners();
+		}
 	}
 
 	function stopSpeaking() {
 		livekitClient?.setMicrophoneEnabled(false);
+		scheduleIdleDisconnect();
 		uiState = 'connected';
 		detail = 'Mic closed. Hold again to speak.';
 	}
@@ -338,16 +444,12 @@
 		paused = !paused;
 		if (paused) {
 			livekitClient?.setMicrophoneEnabled(false);
-			disconnectTranslationSession();
+			disconnectAllTranslationSessions();
 			uiState = 'paused';
 			detail = 'Translation is paused. OpenAI session disconnected.';
 		} else {
 			detail = 'Translation resumed. Reconnecting when the other phone is ready.';
-			if (remoteMicrophoneTrack) {
-				void connectTranslation(remoteMicrophoneTrack);
-			} else {
-				uiState = participantCount > 1 ? 'connected' : 'waiting_for_other_participant';
-			}
+			uiState = participantCount > 1 ? 'connected' : 'waiting_for_other_participant';
 		}
 	}
 
@@ -386,27 +488,49 @@
 	}
 
 	async function reconnectTranslation() {
-		if (remoteMicrophoneTrack) {
-			disconnectTranslationSession();
-			await connectTranslation(remoteMicrophoneTrack);
+		disconnectAllTranslationSessions();
+		if (participantCount === 2 && remoteMicrophoneTrack) {
+			await connectDirectTranslation(remoteMicrophoneTrack);
+		} else {
+			await connectOutgoingTranslationsForCurrentListeners();
 		}
 	}
 
 	function leave() {
 		uiState = 'ended';
-		disconnectTranslationSession();
+		disconnectAllTranslationSessions();
 		livekitClient?.disconnect();
 		stopStream(micStream);
 		goto(resolve('/'));
 	}
 
-	function disconnectTranslationSession() {
+	function disconnectAllTranslationSessions() {
+		disconnectDirectTranslation();
+		disconnectAllOutgoingTranslations();
+	}
+
+	function disconnectDirectTranslation() {
 		clearIdleDisconnectTimer();
-		openaiClient?.disconnect();
-		openaiClient = undefined;
-		translationStatus = 'idle';
+		directTranslationClient?.disconnect();
+		directTranslationClient = undefined;
+		directRemoteMicrophoneTrackId = '';
+		translationStatus = outgoingTranslationClients.size > 0 ? translationStatus : 'idle';
 		translatedAudioStream = undefined;
-		remoteMicrophoneTrackId = '';
+		if (remoteAudioElement) {
+			remoteAudioElement.pause();
+			remoteAudioElement.srcObject = null;
+		}
+	}
+
+	function disconnectAllOutgoingTranslations() {
+		clearIdleDisconnectTimer();
+		for (const [target, client] of outgoingTranslationClients) {
+			client.disconnect();
+			livekitClient?.unpublishTranslationTrack(target);
+		}
+		outgoingTranslationClients.clear();
+		translationStatus = 'idle';
+		incomingTranslationTrackId = '';
 		if (remoteAudioElement) {
 			remoteAudioElement.pause();
 			remoteAudioElement.srcObject = null;
@@ -415,14 +539,70 @@
 
 	function scheduleIdleDisconnect() {
 		clearIdleDisconnectTimer();
-		if (!openaiClient || paused || uiState === 'ended') return;
+		if (
+			(!directTranslationClient && outgoingTranslationClients.size === 0) ||
+			paused ||
+			uiState === 'ended'
+		)
+			return;
 
 		idleDisconnectTimer = setTimeout(() => {
-			if (!openaiClient || paused || uiState === 'ended' || uiState === 'speaking') return;
-			disconnectTranslationSession();
+			if (
+				(!directTranslationClient && outgoingTranslationClients.size === 0) ||
+				paused ||
+				uiState === 'ended' ||
+				uiState === 'speaking'
+			)
+				return;
+			disconnectAllTranslationSessions();
 			uiState = participantCount > 1 ? 'connected' : 'waiting_for_other_participant';
 			detail = 'Translation idle. OpenAI session disconnected until needed again.';
 		}, 60_000);
+	}
+
+	async function connectOutgoingTranslationsForCurrentListeners() {
+		if (participantCount < 3) return;
+		await refreshParticipants(false);
+		const [sourceTrack] = micStream?.getAudioTracks() ?? [];
+		if (!sourceTrack) return;
+
+		for (const target of getNeededOutputLanguages()) {
+			await connectOutgoingTranslation(target, sourceTrack);
+		}
+	}
+
+	function getNeededOutputLanguages() {
+		return [
+			...new Set(
+				activeParticipants
+					.filter(
+						(participant) =>
+							participant.status === 'active' &&
+							participant.participantId !== participantId &&
+							participant.hearLanguage !== spokenLanguage
+					)
+					.map((participant) => participant.hearLanguage)
+			)
+		];
+	}
+
+	function startParticipantPolling() {
+		void refreshParticipants();
+		participantPollTimer ??= setInterval(() => {
+			void refreshParticipants();
+		}, 3000);
+	}
+
+	async function refreshParticipants(connectNewOutputs = true) {
+		const roomResponse = await fetch(`/api/rooms/${roomId}`).catch(() => null);
+		if (!roomResponse?.ok) return;
+		const room = await roomResponse.json();
+		activeParticipants = (room.participants ?? []).filter(
+			(participant: { status: string }) => participant.status === 'active'
+		);
+		if (connectNewOutputs && uiState === 'speaking') {
+			void connectOutgoingTranslationsForCurrentListeners();
+		}
 	}
 
 	function clearIdleDisconnectTimer() {
@@ -514,8 +694,12 @@
 				clearTimeout(latencyFlushTimer);
 				latencyFlushTimer = undefined;
 			}
+			if (participantPollTimer) {
+				clearInterval(participantPollTimer);
+				participantPollTimer = undefined;
+			}
 			flushLatencyEvents();
-			disconnectTranslationSession();
+			disconnectAllTranslationSessions();
 			livekitClient?.disconnect();
 			stopStream(micStream);
 		};
@@ -556,7 +740,7 @@
 				{#if isInSetup}
 					{#if !isHost}
 						<label class="lang">
-							<span class="lang-label">YOUR LANGUAGE</span>
+							<span class="lang-label">LANGUAGE YOU HEAR</span>
 							<select bind:value={spokenLanguage}>
 								{#each languages as language (language.code)}
 									<option value={language.code}>{language.label}</option>
@@ -565,10 +749,11 @@
 						</label>
 					{:else}
 						<p class="host-lang mono">
-							<span class="dim">YOU SPEAK</span>
+							<span class="dim">YOU HEAR</span>
 							<span class="value">{getLanguageLabel(spokenLanguage)}</span>
 						</p>
 					{/if}
+					<p class="lang-hint mono">YOU CAN SPEAK ANY LANGUAGE — WE TRANSLATE</p>
 					<button
 						class="start"
 						type="button"
@@ -585,7 +770,7 @@
 						</div>
 						<div>
 							<dt>PEERS</dt>
-							<dd>{participantCount}/2</dd>
+							<dd>{participantCount}</dd>
 						</div>
 					</dl>
 					<div class="viz-area">
@@ -775,6 +960,17 @@
 		font-size: 0.95rem;
 		font-weight: 600;
 		color: var(--screen-green);
+	}
+
+	.lang-hint {
+		margin: 0;
+		font-size: 0.6rem;
+		font-weight: 700;
+		letter-spacing: 0.18em;
+		color: var(--screen-green-dim);
+		text-transform: uppercase;
+		text-align: center;
+		opacity: 0.75;
 	}
 
 	.lang select {
