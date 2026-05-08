@@ -10,6 +10,7 @@
 		defaultHearLanguage,
 		getLanguageLabel,
 		getOpenAITranslationLanguage,
+		isSupportedLanguage,
 		languages
 	} from '$lib/constants/languages';
 	import { requestMicrophone, stopStream, unlockAudioPlayback } from '$lib/realtime/audioRouting';
@@ -42,7 +43,6 @@
 	let audioPickerOpen = $state(false);
 	let remoteMicrophoneTrackId = '';
 	let latencyMarks = $state<Record<string, number>>({});
-	let latencyRows = $state<Array<{ label: string; value: string }>>([]);
 
 	let micStream = $state<MediaStream | undefined>(undefined);
 	let remoteMicrophoneTrack: MediaStreamTrack | undefined;
@@ -81,6 +81,7 @@
 	let isInSetup = $derived(
 		uiState === 'idle' || uiState === 'microphone_denied' || uiState === 'error'
 	);
+	let isHost = $state(false);
 	let vizStream = $derived(
 		uiState === 'speaking'
 			? micStream
@@ -89,6 +90,16 @@
 				: undefined
 	);
 	let vizColor = $derived<'green' | 'purple'>(uiState === 'speaking' ? 'green' : 'purple');
+
+	$effect(() => {
+		const id = roomId;
+		if (typeof localStorage === 'undefined') return;
+		const stored = localStorage.getItem(`langlink:${id}:host-lang`);
+		if (stored && isSupportedLanguage(stored)) {
+			spokenLanguage = stored;
+			isHost = true;
+		}
+	});
 
 	async function join() {
 		unlockClickAudio();
@@ -373,7 +384,7 @@
 
 	function resetLatency(reason: string) {
 		latencyMarks = { latency_reset: performance.now() };
-		latencyRows = [{ label: 'trace', value: reason }];
+		console.debug('[langlink latency]', 'trace', reason);
 	}
 
 	function markLatency(name: string) {
@@ -381,7 +392,6 @@
 		if (latencyMarks[name] !== undefined) return;
 
 		latencyMarks = { ...latencyMarks, [name]: now };
-		latencyRows = buildLatencyRows(latencyMarks);
 		console.debug('[langlink latency]', name, summariseLatency(latencyMarks));
 	}
 
@@ -440,14 +450,21 @@
 				/>
 
 				{#if isInSetup}
-					<label class="lang">
-						<span class="lang-label">YOUR LANGUAGE</span>
-						<select bind:value={spokenLanguage}>
-							{#each languages as language (language.code)}
-								<option value={language.code}>{language.label}</option>
-							{/each}
-						</select>
-					</label>
+					{#if !isHost}
+						<label class="lang">
+							<span class="lang-label">YOUR LANGUAGE</span>
+							<select bind:value={spokenLanguage}>
+								{#each languages as language (language.code)}
+									<option value={language.code}>{language.label}</option>
+								{/each}
+							</select>
+						</label>
+					{:else}
+						<p class="host-lang mono">
+							<span class="dim">YOU SPEAK</span>
+							<span class="value">{getLanguageLabel(spokenLanguage)}</span>
+						</p>
+					{/if}
 					<button
 						class="start"
 						type="button"
@@ -485,21 +502,6 @@
 					<p class="error">⚠ {error}</p>
 				{/if}
 
-				{#if latencyRows.length}
-					<section class="latency-panel" aria-label="Latency diagnostics">
-						<div class="latency-head">
-							<span>LATENCY</span>
-							<span>LOCAL</span>
-						</div>
-						<div class="latency-grid">
-							{#each latencyRows as row (row.label)}
-								<span>{row.label}</span>
-								<strong>{row.value}</strong>
-							{/each}
-						</div>
-					</section>
-				{/if}
-
 				{#if uiState === 'reconnecting'}
 					<button
 						class="reconnect"
@@ -529,10 +531,6 @@
 			onstart={startSpeaking}
 			onstop={stopSpeaking}
 		/>
-	{/snippet}
-
-	{#snippet footer()}
-		HEADPHONES RECOMMENDED · ONE PHONE PER PERSON
 	{/snippet}
 </DeviceFrame>
 
@@ -585,6 +583,31 @@
 		letter-spacing: 0.2em;
 		color: var(--screen-green-dim);
 		text-transform: uppercase;
+	}
+
+	.host-lang {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		margin: 0;
+		padding: 0.55rem 0.75rem;
+		border-radius: 0.4rem;
+		background: oklch(0.1 0.02 145);
+		border: 1px solid oklch(0.4 0.1 145 / 0.25);
+	}
+
+	.host-lang .dim {
+		font-size: 0.62rem;
+		font-weight: 700;
+		letter-spacing: 0.2em;
+		color: var(--screen-green-dim);
+		text-transform: uppercase;
+	}
+
+	.host-lang .value {
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: var(--screen-green);
 	}
 
 	.lang select {
@@ -673,41 +696,6 @@
 		margin: 0;
 		font-size: 0.78rem;
 		color: oklch(0.78 0.18 28);
-	}
-
-	.latency-panel {
-		display: grid;
-		gap: 0.45rem;
-		border: 1px solid oklch(0.45 0.06 150 / 0.35);
-		border-radius: 0.45rem;
-		background: oklch(0.16 0.03 150 / 0.52);
-		padding: 0.6rem;
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-	}
-
-	.latency-head,
-	.latency-grid {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 0.35rem 0.75rem;
-		align-items: baseline;
-	}
-
-	.latency-head {
-		color: var(--screen-green);
-		font-size: 0.64rem;
-		letter-spacing: 0.16em;
-	}
-
-	.latency-grid {
-		color: var(--screen-green-dim);
-		font-size: 0.68rem;
-		text-transform: uppercase;
-	}
-
-	.latency-grid strong {
-		color: var(--screen-green);
-		font-weight: 700;
 	}
 
 	.audio-host {
