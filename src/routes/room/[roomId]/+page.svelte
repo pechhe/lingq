@@ -16,6 +16,7 @@
 		isSupportedLanguage,
 		languages
 	} from '$lib/constants/languages';
+	import { createAudioLevelMeter, type AudioLevelMeter } from '$lib/realtime/audioLevel';
 	import {
 		persistMicSelection,
 		requestMicrophone,
@@ -66,6 +67,8 @@
 	let directRemoteMicrophoneTrackId = '';
 	let idleDisconnectTimer: ReturnType<typeof setTimeout> | undefined;
 	let participantPollTimer: ReturnType<typeof setInterval> | undefined;
+	let translatedAudioEnergyMeter: AudioLevelMeter | undefined;
+	let translatedAudioEnergyTimer: ReturnType<typeof setInterval> | undefined;
 	let latencyTraceId = '';
 	let latencyFlushTimer: ReturnType<typeof setTimeout> | undefined;
 	let latencyEventBuffer: Array<{ name: string; elapsedMs: number; at: number }> = [];
@@ -212,8 +215,10 @@
 					uiState = 'connected';
 					detail = 'Hold the button while speaking. Other languages hear the translation.';
 				}
-				if (participantCount === 2 && !publication.isMuted) {
-					void connectDirectTranslation(track);
+				if (participantCount === 2 && !directTranslationClient) {
+					resetLatency(publication.isMuted ? 'translation_prewarm' : 'remote_speech');
+					if (!publication.isMuted) markLatency('livekit_remote_ptt_on');
+					void connectDirectTranslation(track, { background: publication.isMuted });
 				}
 			},
 			onRemoteTranslation: ({
@@ -303,7 +308,10 @@
 		detail = 'Still waiting for another phone.';
 	}
 
-	async function connectDirectTranslation(sourceTrack: MediaStreamTrack) {
+	async function connectDirectTranslation(
+		sourceTrack: MediaStreamTrack,
+		options: { background?: boolean } = {}
+	) {
 		if (
 			!livekitClient ||
 			paused ||
@@ -317,8 +325,10 @@
 		directRemoteMicrophoneTrackId = sourceTrack.id;
 		clearIdleDisconnectTimer();
 		directTranslationClient?.disconnect();
-		uiState = 'connecting_translation';
-		detail = `Connecting direct translation into ${getLanguageLabel(targetLanguage)}.`;
+		if (!options.background) {
+			uiState = 'connecting_translation';
+			detail = `Connecting direct translation into ${getLanguageLabel(targetLanguage)}.`;
+		}
 		markLatency('translation_connect_requested');
 
 		directTranslationClient = new OpenAIRealtimeClient({
@@ -331,8 +341,11 @@
 			onTranslatedAudio: (stream) => {
 				markLatency('translated_audio_stream_ready');
 				translatedAudioStream = stream;
-				uiState = 'receiving_translation';
-				detail = 'Receiving translated audio.';
+				startTranslatedAudioEnergyMonitor(stream);
+				if (!options.background) {
+					uiState = 'receiving_translation';
+					detail = 'Receiving translated audio.';
+				}
 			},
 			onStatus: (status) => {
 				translationStatus = status;
@@ -357,6 +370,10 @@
 		});
 
 		await directTranslationClient.connect();
+		if (options.background) {
+			scheduleIdleDisconnect();
+			return;
+		}
 		uiState = participantCount > 1 ? 'connected' : 'waiting_for_other_participant';
 		detail =
 			participantCount > 1
@@ -511,6 +528,7 @@
 
 	function disconnectDirectTranslation() {
 		clearIdleDisconnectTimer();
+		stopTranslatedAudioEnergyMonitor();
 		directTranslationClient?.disconnect();
 		directTranslationClient = undefined;
 		directRemoteMicrophoneTrackId = '';
@@ -524,6 +542,7 @@
 
 	function disconnectAllOutgoingTranslations() {
 		clearIdleDisconnectTimer();
+		stopTranslatedAudioEnergyMonitor();
 		for (const [target, client] of outgoingTranslationClients) {
 			client.disconnect();
 			livekitClient?.unpublishTranslationTrack(target);
@@ -610,6 +629,26 @@
 			clearTimeout(idleDisconnectTimer);
 			idleDisconnectTimer = undefined;
 		}
+	}
+
+	function startTranslatedAudioEnergyMonitor(stream: MediaStream) {
+		stopTranslatedAudioEnergyMonitor();
+		translatedAudioEnergyMeter = createAudioLevelMeter(stream);
+		translatedAudioEnergyTimer = setInterval(() => {
+			if ((translatedAudioEnergyMeter?.level() ?? 0) > 0.035) {
+				markLatency('first_translated_audio_energy');
+				stopTranslatedAudioEnergyMonitor();
+			}
+		}, 40);
+	}
+
+	function stopTranslatedAudioEnergyMonitor() {
+		if (translatedAudioEnergyTimer) {
+			clearInterval(translatedAudioEnergyTimer);
+			translatedAudioEnergyTimer = undefined;
+		}
+		translatedAudioEnergyMeter?.stop();
+		translatedAudioEnergyMeter = undefined;
 	}
 
 	$effect(() => {
