@@ -72,7 +72,7 @@
 		display: block;
 		flex: 1;
 		width: 100%;
-		min-height: clamp(11rem, 38vh, 22rem);
+		min-height: clamp(8.5rem, 26vh, 18rem);
 		padding: 0;
 		border: 0;
 		border-radius: 1.15rem;

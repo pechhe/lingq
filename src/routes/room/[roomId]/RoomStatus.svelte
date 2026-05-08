@@ -15,7 +15,7 @@
 	} = $props();
 </script>
 
-<section aria-label="Connection status" class="status-panel">
+<section aria-label="Connection status" class="status-panel crt-fringe">
 	<div class="row">
 		<StatusBadge label="MIC" level={mic} />
 		<StatusBadge label="LINK" level={participant} />

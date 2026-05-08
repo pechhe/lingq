@@ -83,16 +83,16 @@
 		<DeviceScreen tone="amber">
 			{#if !createdRoom}
 				<div class="screen-stack">
-					<header class="screen-head">
+					<header class="screen-head crt-fringe">
 						<span>SETUP</span>
 						<span class="status">▮ READY</span>
 					</header>
-					<div class="hero">
+					<div class="hero crt-fringe">
 						<p class="kicker">LIVE TWO-PHONE TRANSLATION</p>
 						<h1>Hold to speak.<br />They hear you<br />in their language.</h1>
 					</div>
 					<label class="lang">
-						<span class="lang-label">YOUR LANGUAGE</span>
+						<span class="lang-label crt-fringe">YOUR LANGUAGE</span>
 						<select bind:value={spokenLanguage}>
 							{#each languages as language (language.code)}
 								<option value={language.code}>{language.label}</option>
@@ -100,19 +100,19 @@
 						</select>
 					</label>
 					{#if error}
-						<p class="error">⚠ {error}</p>
+						<p class="error crt-fringe">⚠ {error}</p>
 					{/if}
 				</div>
 			{:else}
 				<div class="screen-stack">
-					<header class="screen-head">
+					<header class="screen-head crt-fringe">
 						<span>ROOM</span>
 						<span class="status">▮ OPEN</span>
 					</header>
 					<div class="qr-block">
 						<QrCode value={createdRoom.joinUrl} />
 					</div>
-					<div class="room-meta">
+					<div class="room-meta crt-fringe">
 						<p class="kicker">SCAN OR TAP</p>
 						<p class="room-id">{createdRoom.roomId}</p>
 						<button

@@ -1,16 +1,40 @@
 <script lang="ts">
 	type Color = 'green' | 'purple';
 
-	const PALETTES: Record<Color, { trace: string; glow: string; baseline: string }> = {
+	type Palette = {
+		trace: string;
+		glow: string;
+		halo: string;
+		core: string;
+		baseline: string;
+		grid: string;
+		gridStrong: string;
+		r: string;
+		b: string;
+	};
+
+	const PALETTES: Record<Color, Palette> = {
 		green: {
 			trace: 'rgb(140, 240, 165)',
-			glow: 'rgba(140, 240, 165, 0.7)',
-			baseline: 'rgba(140, 240, 165, 0.18)'
+			glow: 'rgba(140, 240, 165, 0.55)',
+			halo: 'rgba(140, 240, 165, 0.22)',
+			core: 'rgba(225, 255, 235, 0.95)',
+			baseline: 'rgba(140, 240, 165, 0.16)',
+			grid: 'rgba(140, 240, 165, 0.07)',
+			gridStrong: 'rgba(140, 240, 165, 0.13)',
+			r: 'rgba(255, 70, 90, 0.55)',
+			b: 'rgba(70, 90, 255, 0.55)'
 		},
 		purple: {
 			trace: 'rgb(205, 140, 255)',
-			glow: 'rgba(205, 140, 255, 0.7)',
-			baseline: 'rgba(205, 140, 255, 0.18)'
+			glow: 'rgba(205, 140, 255, 0.55)',
+			halo: 'rgba(205, 140, 255, 0.22)',
+			core: 'rgba(245, 220, 255, 0.95)',
+			baseline: 'rgba(205, 140, 255, 0.16)',
+			grid: 'rgba(205, 140, 255, 0.07)',
+			gridStrong: 'rgba(205, 140, 255, 0.13)',
+			r: 'rgba(255, 70, 130, 0.5)',
+			b: 'rgba(120, 90, 255, 0.55)'
 		}
 	};
 
@@ -89,6 +113,117 @@
 		if (canvasContext) canvasContext.setTransform(dpr, 0, 0, dpr, 0, 0);
 	}
 
+	function drawGrid(w: number, h: number, palette: Palette) {
+		if (!canvasContext) return;
+		const ctx = canvasContext;
+		ctx.save();
+		ctx.lineWidth = 1;
+		ctx.setLineDash([2, 4]);
+		ctx.strokeStyle = palette.grid;
+
+		const verticalDivisions = 8;
+		for (let i = 1; i < verticalDivisions; i += 1) {
+			const x = Math.round((w / verticalDivisions) * i) + 0.5;
+			ctx.beginPath();
+			ctx.moveTo(x, 0);
+			ctx.lineTo(x, h);
+			ctx.stroke();
+		}
+
+		const horizontalDivisions = 4;
+		for (let i = 1; i < horizontalDivisions; i += 1) {
+			const y = Math.round((h / horizontalDivisions) * i) + 0.5;
+			ctx.beginPath();
+			ctx.moveTo(0, y);
+			ctx.lineTo(w, y);
+			ctx.stroke();
+		}
+
+		ctx.setLineDash([]);
+		ctx.restore();
+	}
+
+	function drawBaseline(w: number, h: number, palette: Palette) {
+		if (!canvasContext) return;
+		const ctx = canvasContext;
+		ctx.strokeStyle = palette.gridStrong;
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		ctx.moveTo(0, h / 2);
+		ctx.lineTo(w, h / 2);
+		ctx.stroke();
+	}
+
+	function tracePath(data: Uint8Array, w: number, h: number, offsetX: number) {
+		if (!canvasContext) return;
+		const ctx = canvasContext;
+		const sliceWidth = w / data.length;
+		ctx.beginPath();
+		let x = offsetX;
+		for (let i = 0; i < data.length; i += 1) {
+			const v = (data[i] - 128) / 128;
+			const y = h / 2 + v * (h / 2) * 0.85;
+			if (i === 0) ctx.moveTo(x, y);
+			else ctx.lineTo(x, y);
+			x += sliceWidth;
+		}
+		ctx.stroke();
+	}
+
+	function idlePath(w: number, h: number, offsetX: number) {
+		if (!canvasContext) return;
+		const ctx = canvasContext;
+		ctx.beginPath();
+		const segments = 80;
+		for (let i = 0; i <= segments; i += 1) {
+			const t = i / segments;
+			const x = t * w + offsetX;
+			const wobble = Math.sin(t * Math.PI * 2 + phaseOffset) * 1.1;
+			const y = h / 2 + wobble;
+			if (i === 0) ctx.moveTo(x, y);
+			else ctx.lineTo(x, y);
+		}
+		ctx.stroke();
+	}
+
+	function drawCRTWaveform(drawTrace: (offsetX: number) => void, palette: Palette, live: boolean) {
+		if (!canvasContext) return;
+		const ctx = canvasContext;
+		ctx.lineCap = 'round';
+		ctx.lineJoin = 'round';
+
+		// Outer halo — soft, wide blur
+		ctx.shadowBlur = 18;
+		ctx.shadowColor = palette.halo;
+		ctx.strokeStyle = palette.halo;
+		ctx.lineWidth = live ? 5.5 : 3.5;
+		drawTrace(0);
+
+		// Mid trace — phosphor body
+		ctx.shadowBlur = 9;
+		ctx.shadowColor = palette.glow;
+		ctx.strokeStyle = palette.glow;
+		ctx.lineWidth = live ? 2.5 : 1.8;
+		drawTrace(0);
+
+		// Chromatic aberration — RGB-shifted ghosts using lighter composite
+		ctx.shadowBlur = 0;
+		ctx.globalCompositeOperation = 'lighter';
+		ctx.lineWidth = live ? 1.2 : 0.9;
+		ctx.strokeStyle = palette.r;
+		drawTrace(-1.2);
+		ctx.strokeStyle = palette.b;
+		drawTrace(1.4);
+
+		// Bright core — the sharp inner trace
+		ctx.strokeStyle = palette.core;
+		ctx.lineWidth = live ? 1 : 0.8;
+		drawTrace(0);
+
+		ctx.globalCompositeOperation = 'source-over';
+		ctx.shadowBlur = 0;
+	}
+
 	function tick() {
 		if (!canvas || !canvasContext || !wrapper) {
 			rafId = requestAnimationFrame(tick);
@@ -100,74 +235,23 @@
 
 		const palette = PALETTES[color];
 
-		canvasContext.fillStyle = 'rgba(0, 0, 0, 0.22)';
+		// Phosphor decay — longer trail, gives the persistent CRT feel
+		canvasContext.fillStyle = 'rgba(0, 0, 0, 0.16)';
 		canvasContext.fillRect(0, 0, w, h);
 
-		canvasContext.strokeStyle = palette.baseline;
-		canvasContext.lineWidth = 1;
-		canvasContext.beginPath();
-		canvasContext.moveTo(0, h / 2);
-		canvasContext.lineTo(w, h / 2);
-		canvasContext.stroke();
+		drawGrid(w, h, palette);
+		drawBaseline(w, h, palette);
 
 		if (analyser && timeBuffer && sourceNode) {
 			analyser.getByteTimeDomainData(timeBuffer);
-			drawWaveform(timeBuffer, w, h, palette);
+			const data = timeBuffer;
+			drawCRTWaveform((offsetX) => tracePath(data, w, h, offsetX), palette, true);
 		} else {
-			drawIdle(w, h, palette);
+			phaseOffset += 0.018;
+			drawCRTWaveform((offsetX) => idlePath(w, h, offsetX), palette, false);
 		}
 
 		rafId = requestAnimationFrame(tick);
-	}
-
-	function drawWaveform(
-		data: Uint8Array,
-		w: number,
-		h: number,
-		palette: { trace: string; glow: string }
-	) {
-		if (!canvasContext) return;
-		const ctx = canvasContext;
-		const sliceWidth = w / data.length;
-
-		ctx.shadowBlur = 12;
-		ctx.shadowColor = palette.glow;
-		ctx.strokeStyle = palette.trace;
-		ctx.lineWidth = 1.6;
-		ctx.lineJoin = 'round';
-		ctx.beginPath();
-		let x = 0;
-		for (let i = 0; i < data.length; i += 1) {
-			const v = (data[i] - 128) / 128;
-			const y = h / 2 + v * (h / 2) * 0.85;
-			if (i === 0) ctx.moveTo(x, y);
-			else ctx.lineTo(x, y);
-			x += sliceWidth;
-		}
-		ctx.stroke();
-		ctx.shadowBlur = 0;
-	}
-
-	function drawIdle(w: number, h: number, palette: { trace: string; glow: string }) {
-		if (!canvasContext) return;
-		const ctx = canvasContext;
-		phaseOffset += 0.018;
-		ctx.shadowBlur = 8;
-		ctx.shadowColor = palette.glow;
-		ctx.strokeStyle = palette.trace;
-		ctx.lineWidth = 1.2;
-		ctx.beginPath();
-		const segments = 80;
-		for (let i = 0; i <= segments; i += 1) {
-			const t = i / segments;
-			const x = t * w;
-			const wobble = Math.sin(t * Math.PI * 2 + phaseOffset) * 1.1;
-			const y = h / 2 + wobble;
-			if (i === 0) ctx.moveTo(x, y);
-			else ctx.lineTo(x, y);
-		}
-		ctx.stroke();
-		ctx.shadowBlur = 0;
 	}
 
 	$effect(() => {

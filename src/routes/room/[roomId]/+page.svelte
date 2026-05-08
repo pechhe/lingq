@@ -779,7 +779,7 @@
 				{#if isInSetup}
 					{#if !isHost}
 						<label class="lang">
-							<span class="lang-label">LANGUAGE YOU HEAR</span>
+							<span class="lang-label crt-fringe">LANGUAGE YOU HEAR</span>
 							<select bind:value={spokenLanguage}>
 								{#each languages as language (language.code)}
 									<option value={language.code}>{language.label}</option>
@@ -787,14 +787,14 @@
 							</select>
 						</label>
 					{:else}
-						<p class="host-lang mono">
+						<p class="host-lang mono crt-fringe">
 							<span class="dim">YOU HEAR</span>
 							<span class="value">{getLanguageLabel(spokenLanguage)}</span>
 						</p>
 					{/if}
-					<p class="lang-hint mono">YOU CAN SPEAK ANY LANGUAGE — WE TRANSLATE</p>
+					<p class="lang-hint mono crt-fringe">YOU CAN SPEAK ANY LANGUAGE — WE TRANSLATE</p>
 					<button
-						class="start"
+						class="crt-fringe start"
 						type="button"
 						onpointerdown={() => playClick('down')}
 						onclick={join}
@@ -802,7 +802,7 @@
 						{uiState === 'error' ? '↻ TRY AGAIN' : '▶ START ON THIS PHONE'}
 					</button>
 				{:else}
-					<dl class="meta-grid">
+					<dl class="meta-grid crt-fringe">
 						<div>
 							<dt>HEARING</dt>
 							<dd>{getLanguageLabel(targetLanguage || spokenLanguage)}</dd>
@@ -814,7 +814,7 @@
 					</dl>
 					<div class="viz-area">
 						<AudioVisualizer stream={vizStream} color={vizColor} />
-						<span class="viz-label mono">
+						<span class="viz-label mono crt-fringe">
 							{#if uiState === 'speaking'}
 								▶ TX · YOU
 							{:else if translatedAudioStream && !muted}
@@ -827,12 +827,12 @@
 				{/if}
 
 				{#if error}
-					<p class="error">⚠ {error}</p>
+					<p class="error crt-fringe">⚠ {error}</p>
 				{/if}
 
 				{#if uiState === 'reconnecting'}
 					<button
-						class="reconnect"
+						class="reconnect crt-fringe"
 						type="button"
 						onpointerdown={() => playClick('down')}
 						onclick={reconnectTranslation}

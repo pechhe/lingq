@@ -58,17 +58,19 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 0.85rem;
+		gap: 0.5rem;
 		width: 100%;
 		min-height: 100svh;
-		padding: calc(env(safe-area-inset-top, 0px) + clamp(0.5rem, 2vw, 1.5rem))
-			clamp(0.5rem, 2vw, 1.5rem) calc(env(safe-area-inset-bottom, 0px) + clamp(0.5rem, 2vw, 1.5rem));
+		padding: calc(env(safe-area-inset-top, 0px) + clamp(0.15rem, 1vw, 1.25rem))
+			clamp(0.5rem, 2vw, 1.5rem)
+			calc(env(safe-area-inset-bottom, 0px) + clamp(0.15rem, 1vw, 1.25rem));
 	}
 
 	@media (min-width: 26rem) {
 		.stage {
 			padding-left: clamp(1.5rem, 3vw, 2.25rem);
 			padding-right: clamp(0.5rem, 2vw, 1.5rem);
+			gap: 0.85rem;
 		}
 	}
 
@@ -76,13 +78,14 @@
 		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: clamp(0.6rem, 2vw, 0.9rem);
+		gap: clamp(0.4rem, 1.4vw, 0.85rem);
 		width: 100%;
 		max-width: 26rem;
 		flex: 1;
 		min-height: 0;
-		padding: clamp(0.85rem, 3vw, 1.2rem) clamp(0.85rem, 3vw, 1.2rem) clamp(0.7rem, 2.5vw, 0.95rem);
-		border-radius: clamp(1.6rem, 4vw, 2.4rem);
+		padding: clamp(0.55rem, 2vw, 1.05rem) clamp(0.7rem, 2.6vw, 1.15rem)
+			clamp(0.45rem, 1.8vw, 0.85rem);
+		border-radius: clamp(1.4rem, 3.5vw, 2.2rem);
 		background: linear-gradient(
 			180deg,
 			var(--device-body-top) 0%,
