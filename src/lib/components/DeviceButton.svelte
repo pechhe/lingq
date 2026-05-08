@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { playClick } from '$lib/realtime/clickSound';
+	import { playKey } from '$lib/realtime/clickSound';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -24,12 +24,12 @@
 
 	function handlePointerDown() {
 		if (disabled) return;
-		playClick('down');
+		playKey('press');
 	}
 
 	function handlePointerUp() {
 		if (disabled) return;
-		playClick('up');
+		playKey('release');
 	}
 </script>
 
