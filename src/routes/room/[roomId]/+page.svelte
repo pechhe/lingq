@@ -39,7 +39,6 @@
 	let translatedAudioStream = $state<MediaStream>();
 	let remoteAudioElement = $state<HTMLAudioElement>();
 	let audioPickerOpen = $state(false);
-	let speakerLevel = $state(0);
 	let remoteMicrophoneTrackId = '';
 
 	let micStream: MediaStream | undefined;
@@ -47,8 +46,6 @@
 	let livekitClient: LiveKitRoomClient | undefined;
 	let openaiClient: OpenAIRealtimeClient | undefined;
 	let idleDisconnectTimer: ReturnType<typeof setTimeout> | undefined;
-	let levelMeter: AudioLevelMeter | undefined;
-	let levelRaf: number | undefined;
 
 	let roomId = $derived(params.roomId);
 	let storageKey = $derived(`langlink:${roomId}:participant`);
@@ -342,16 +339,6 @@
 		}
 	}
 
-	function stopLevelMeter() {
-		if (levelRaf !== undefined) {
-			cancelAnimationFrame(levelRaf);
-			levelRaf = undefined;
-		}
-		levelMeter?.stop();
-		levelMeter = undefined;
-		speakerLevel = 0;
-	}
-
 	$effect(() => {
 		if (remoteAudioElement && translatedAudioStream) {
 			remoteAudioElement.srcObject = translatedAudioStream;
@@ -362,24 +349,7 @@
 	});
 
 	$effect(() => {
-		if (!translatedAudioStream || muted) {
-			stopLevelMeter();
-			return;
-		}
-		stopLevelMeter();
-		levelMeter = createAudioLevelMeter(translatedAudioStream);
-		const tick = () => {
-			if (!levelMeter) return;
-			speakerLevel = levelMeter.level();
-			levelRaf = requestAnimationFrame(tick);
-		};
-		levelRaf = requestAnimationFrame(tick);
-		return () => stopLevelMeter();
-	});
-
-	$effect(() => {
 		return () => {
-			stopLevelMeter();
 			disconnectTranslationSession();
 			livekitClient?.disconnect();
 			stopStream(micStream);
@@ -393,9 +363,6 @@
 
 <DeviceFrame topLabel="ROOM {roomId.toUpperCase()}" {topLed}>
 	{#snippet display()}
-		<div class="grille-wrap">
-			<SpeakerGrille level={speakerLevel} label="Translated audio output" />
-		</div>
 		<DeviceScreen tone="green">
 			<div class="screen-stack">
 				<RoomStatus
@@ -470,16 +437,6 @@
 <audio bind:this={remoteAudioElement} class="audio-host" autoplay playsinline {muted}></audio>
 
 <style>
-	.grille-wrap {
-		display: flex;
-		justify-content: center;
-		flex-shrink: 0;
-	}
-
-	.grille-wrap :global(.grille) {
-		width: clamp(8rem, 44vw, 12rem);
-	}
-
 	.screen-stack {
 		display: flex;
 		flex-direction: column;
