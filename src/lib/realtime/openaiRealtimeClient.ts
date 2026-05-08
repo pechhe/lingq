@@ -10,11 +10,20 @@ export type OpenAIRealtimeClientOptions = {
 	onError?: (error: Error) => void;
 };
 
+function getStoredOpenAIKey() {
+	try {
+		return localStorage.getItem('langlink:openai-api-key') || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export class OpenAIRealtimeClient {
 	#pc?: RTCPeerConnection;
 	#dataChannel?: RTCDataChannel;
 	#sourceTrack: MediaStreamTrack;
 	#options: OpenAIRealtimeClientOptions;
+	#usageSessionId = '';
 
 	constructor(options: OpenAIRealtimeClientOptions) {
 		this.#options = options;
@@ -25,13 +34,16 @@ export class OpenAIRealtimeClient {
 		this.#options.onMetric?.('openai_connect_start');
 		this.#options.onStatus?.('fetching_token');
 		this.#options.onMetric?.('openai_token_start');
+		const usageSessionId = `openai:${this.#options.roomId}:${this.#options.participantId}:${crypto.randomUUID()}`;
 		const tokenResponse = await fetch('/api/openai/realtime-token', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				roomId: this.#options.roomId,
 				participantId: this.#options.participantId,
-				targetLanguage: this.#options.targetLanguage
+				targetLanguage: this.#options.targetLanguage,
+				openaiApiKey: getStoredOpenAIKey(),
+				usageSessionId
 			})
 		});
 
@@ -40,6 +52,7 @@ export class OpenAIRealtimeClient {
 		}
 
 		const token = await tokenResponse.json();
+		this.#usageSessionId = token.usageSessionId ?? usageSessionId;
 		this.#options.onMetric?.('openai_token_end');
 		const clientSecret = token?.value ?? token?.client_secret?.value;
 		if (!clientSecret) {
@@ -123,10 +136,18 @@ export class OpenAIRealtimeClient {
 	}
 
 	disconnect() {
+		const usageSessionId = this.#usageSessionId;
 		this.#dataChannel?.close();
 		this.#pc?.close();
 		this.#dataChannel = undefined;
 		this.#pc = undefined;
+		this.#usageSessionId = '';
+		if (usageSessionId) {
+			navigator.sendBeacon?.(
+				'/api/openai/realtime-session/end',
+				new Blob([JSON.stringify({ usageSessionId })], { type: 'application/json' })
+			);
+		}
 	}
 
 	#sendEvent(event: Record<string, unknown>) {

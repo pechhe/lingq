@@ -5,6 +5,8 @@ export type CreateRoomInput = {
 	spokenLanguage: string;
 	hearLanguage: string;
 	origin: string;
+	accountId?: string;
+	accessMode?: 'byok' | 'subscription' | 'trial' | 'test' | 'free';
 };
 
 export type JoinRoomInput = {
@@ -17,7 +19,9 @@ export type JoinRoomInput = {
 export async function createRoom(input: CreateRoomInput) {
 	const room = await getConvexClient().mutation(api.rooms.create, {
 		spokenLanguage: input.spokenLanguage,
-		hearLanguage: input.hearLanguage
+		hearLanguage: input.hearLanguage,
+		accountId: input.accountId,
+		accessMode: input.accessMode
 	});
 
 	return {

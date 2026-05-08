@@ -777,6 +777,11 @@
 				</div>
 
 				{#if isInSetup}
+					<img
+						class="instruction-card"
+						src="/images/room-instructions.png"
+						alt="Ready to talk. Talk into your phone mic. Use one earbud for the best experience; both earbuds also work. Hold push to talk while speaking. Release to listen."
+					/>
 					{#if !isHost}
 						<label class="lang">
 							<span class="lang-label crt-fringe">LANGUAGE YOU HEAR</span>
@@ -879,6 +884,9 @@
 		gap: 0.7rem;
 		height: 100%;
 		min-height: 0;
+		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: oklch(0.36 0.1 145 / 0.5) transparent;
 	}
 
 	.viz-area {
@@ -966,6 +974,20 @@
 	.lang {
 		display: grid;
 		gap: 0.4rem;
+	}
+
+	.instruction-card {
+		display: block;
+		width: 100%;
+		height: auto;
+		flex: 0 0 auto;
+		border: 1px solid oklch(0.45 0.12 145 / 0.32);
+		border-radius: 0.45rem;
+		background: oklch(0.06 0.01 145);
+		box-shadow:
+			inset 0 0 0 1px oklch(0 0 0 / 0.55),
+			0 0 18px oklch(0.45 0.14 145 / 0.16);
+		overflow: hidden;
 	}
 
 	.lang-label {

@@ -18,7 +18,17 @@ function createParticipantId() {
 export const create = mutation({
 	args: {
 		spokenLanguage: v.string(),
-		hearLanguage: v.string()
+		hearLanguage: v.string(),
+		accountId: v.optional(v.string()),
+		accessMode: v.optional(
+			v.union(
+				v.literal('byok'),
+				v.literal('subscription'),
+				v.literal('trial'),
+				v.literal('test'),
+				v.literal('free')
+			)
+		)
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now();
@@ -35,6 +45,8 @@ export const create = mutation({
 
 		const room = {
 			roomId,
+			accountId: args.accountId,
+			accessMode: args.accessMode,
 			createdAt: now,
 			updatedAt: now,
 			status: 'open' as const,

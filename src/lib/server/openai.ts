@@ -21,11 +21,14 @@ export function buildTranslationClientSecretRequest(targetLanguage: string) {
 	};
 }
 
-export async function createRealtimeClientSecret(input: { targetLanguage: string }) {
+export async function createRealtimeClientSecret(input: {
+	targetLanguage: string;
+	openaiApiKey?: string;
+}) {
 	const response = await fetch('https://api.openai.com/v1/realtime/translations/client_secrets', {
 		method: 'POST',
 		headers: {
-			Authorization: `Bearer ${getOpenAIEnv().openaiApiKey}`,
+			Authorization: `Bearer ${input.openaiApiKey || getOpenAIEnv().openaiApiKey}`,
 			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify(buildTranslationClientSecretRequest(input.targetLanguage))

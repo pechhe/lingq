@@ -4,6 +4,9 @@ import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	ssr: {
+		noExternal: ['@mmailaender/convex-better-auth-svelte', '@mmailaender/convex-svelte']
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
