@@ -159,10 +159,17 @@
 					disconnectTranslationSession();
 					uiState = 'waiting_for_other_participant';
 					detail = 'Waiting for the other phone to connect.';
+				} else if (count > 1 && uiState === 'waiting_for_other_participant') {
+					uiState = 'connected';
+					detail = 'Hold the button while speaking. The other phone hears the translation.';
 				}
 			},
 			onRemoteMicrophone: (track, publication) => {
 				remoteMicrophoneTrack = track;
+				if (!paused && participantCount > 1 && uiState === 'waiting_for_other_participant') {
+					uiState = 'connected';
+					detail = 'Hold the button while speaking. The other phone hears the translation.';
+				}
 				if (!publication.isMuted) {
 					void connectTranslation(track);
 				}
@@ -213,10 +220,8 @@
 				);
 
 				if (otherParticipant?.spokenLanguage) {
+					uiState = 'connected';
 					detail = `Ready to hear translations in ${getLanguageLabel(targetLanguage)}.`;
-					if (translationStatus === 'connected') {
-						uiState = 'connected';
-					}
 					return;
 				}
 			}
