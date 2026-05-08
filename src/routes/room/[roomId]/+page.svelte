@@ -530,12 +530,28 @@
 	{#snippet display()}
 		<DeviceScreen tone="green">
 			<div class="screen-stack">
-				<RoomStatus
-					mic={micLevel}
-					participant={participantLevel}
-					translation={translationLevel}
-					{detail}
-				/>
+				<div class="top-row">
+					<RoomStatus
+						mic={micLevel}
+						participant={participantLevel}
+						translation={translationLevel}
+						{detail}
+					/>
+					{#if joinUrl}
+						<button
+							type="button"
+							class="qr-tile"
+							aria-label="Copy room join link"
+							onpointerdown={() => playClick('down')}
+							onclick={copyJoinLink}
+						>
+							<div class="qr-frame">
+								<QrCode value={joinUrl} dark="#0d0d0d" light="#e8c890" />
+							</div>
+							<span class="qr-label mono">{qrCopied ? 'COPIED ✓' : 'TAP TO COPY'}</span>
+						</button>
+					{/if}
+				</div>
 
 				{#if isInSetup}
 					{#if !isHost}
@@ -664,6 +680,63 @@
 		text-transform: uppercase;
 		pointer-events: none;
 		text-shadow: 0 0 4px oklch(0 0 0 / 0.8);
+	}
+
+	.top-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.7rem;
+		align-items: start;
+	}
+
+	.qr-tile {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.35rem 0.4rem 0.45rem;
+		border: 1px solid oklch(0.45 0.1 70 / 0.35);
+		border-radius: 0.4rem;
+		background: oklch(0.08 0.02 60);
+		color: var(--screen-amber-dim);
+		cursor: pointer;
+		transition:
+			background 120ms ease,
+			border-color 120ms ease;
+	}
+
+	.qr-tile:hover {
+		background: oklch(0.1 0.03 60);
+		border-color: oklch(0.5 0.12 70 / 0.5);
+	}
+
+	.qr-tile:active {
+		transform: translateY(1px);
+	}
+
+	.qr-frame {
+		display: flex;
+		width: clamp(4.4rem, 14vw, 5.4rem);
+		height: clamp(4.4rem, 14vw, 5.4rem);
+		border-radius: 0.25rem;
+		overflow: hidden;
+		background: oklch(0.06 0 0);
+	}
+
+	.qr-frame :global(img) {
+		width: 100%;
+		height: 100%;
+		max-width: none;
+		border-radius: 0;
+	}
+
+	.qr-label {
+		font-size: 0.55rem;
+		font-weight: 700;
+		letter-spacing: 0.16em;
+		color: var(--screen-amber-dim);
+		text-transform: uppercase;
+		white-space: nowrap;
 	}
 
 	.lang {
