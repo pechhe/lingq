@@ -18,7 +18,7 @@ export type LiveKitRoomClientOptions = {
 	onParticipantCount?: (count: number) => void;
 	onRemoteMicrophone?: (track: MediaStreamTrack, publication: RemoteTrackPublication) => void;
 	onRemoteMicrophoneMuted?: () => void;
-	onRemoteMicrophoneUnmuted?: () => void;
+	onRemoteMicrophoneUnmuted?: (publication: TrackPublication) => void;
 	onStatus?: (status: string) => void;
 	onError?: (error: Error) => void;
 };
@@ -124,7 +124,7 @@ export class LiveKitRoomClient {
 					return;
 				}
 
-				this.#options.onRemoteMicrophoneUnmuted?.();
+				this.#options.onRemoteMicrophoneUnmuted?.(publication);
 			}
 		);
 		this.#room.on(

@@ -5,6 +5,7 @@ export type OpenAIRealtimeClientOptions = {
 	openAITranslationLanguage: string;
 	sourceTrack: MediaStreamTrack;
 	onTranslatedAudio: (stream: MediaStream) => void | Promise<void>;
+	onMetric?: (name: string) => void;
 	onStatus?: (status: string) => void;
 	onError?: (error: Error) => void;
 };
@@ -21,7 +22,9 @@ export class OpenAIRealtimeClient {
 	}
 
 	async connect() {
+		this.#options.onMetric?.('openai_connect_start');
 		this.#options.onStatus?.('fetching_token');
+		this.#options.onMetric?.('openai_token_start');
 		const tokenResponse = await fetch('/api/openai/realtime-token', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -37,6 +40,7 @@ export class OpenAIRealtimeClient {
 		}
 
 		const token = await tokenResponse.json();
+		this.#options.onMetric?.('openai_token_end');
 		const clientSecret = token?.value ?? token?.client_secret?.value;
 		if (!clientSecret) {
 			throw new Error('OpenAI Realtime token response did not include a client secret');
@@ -47,6 +51,7 @@ export class OpenAIRealtimeClient {
 		this.#pc = pc;
 		this.#dataChannel = pc.createDataChannel('oai-events');
 		this.#dataChannel.onopen = () => {
+			this.#options.onMetric?.('openai_data_channel_open');
 			this.#sendEvent({
 				type: 'session.update',
 				session: {
@@ -58,6 +63,9 @@ export class OpenAIRealtimeClient {
 				}
 			});
 		};
+		this.#dataChannel.onmessage = (event) => {
+			this.#handleRealtimeEvent(event.data);
+		};
 		pc.addTrack(this.#sourceTrack, new MediaStream([this.#sourceTrack]));
 
 		pc.ontrack = (event) => {
@@ -65,20 +73,27 @@ export class OpenAIRealtimeClient {
 				event.streams[0] ??
 				(event.track.kind === 'audio' ? new MediaStream([event.track]) : undefined);
 			if (stream) {
+				this.#options.onMetric?.('openai_translated_track');
 				void this.#options.onTranslatedAudio(stream);
 			}
 		};
 
 		pc.onconnectionstatechange = () => {
 			this.#options.onStatus?.(pc.connectionState);
+			if (pc.connectionState === 'connected') {
+				this.#options.onMetric?.('openai_peer_connected');
+			}
 			if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
 				this.#options.onError?.(new Error(`OpenAI peer connection ${pc.connectionState}`));
 			}
 		};
 
+		this.#options.onMetric?.('openai_offer_start');
 		const offer = await pc.createOffer();
 		await pc.setLocalDescription(offer);
+		this.#options.onMetric?.('openai_offer_end');
 
+		this.#options.onMetric?.('openai_sdp_start');
 		const sdpResponse = await fetch('https://api.openai.com/v1/realtime/translations/calls', {
 			method: 'POST',
 			headers: {
@@ -91,12 +106,14 @@ export class OpenAIRealtimeClient {
 		if (!sdpResponse.ok) {
 			throw new Error(`OpenAI SDP exchange failed with ${sdpResponse.status}`);
 		}
+		this.#options.onMetric?.('openai_sdp_end');
 
 		await pc.setRemoteDescription({
 			type: 'answer',
 			sdp: await sdpResponse.text()
 		});
 
+		this.#options.onMetric?.('openai_remote_description_set');
 		this.#options.onStatus?.('connected');
 	}
 
@@ -115,6 +132,24 @@ export class OpenAIRealtimeClient {
 	#sendEvent(event: Record<string, unknown>) {
 		if (this.#dataChannel?.readyState === 'open') {
 			this.#dataChannel.send(JSON.stringify(event));
+		}
+	}
+
+	async #handleRealtimeEvent(payload: unknown) {
+		const text =
+			typeof payload === 'string' ? payload : payload instanceof Blob ? await payload.text() : '';
+		if (!text) return;
+
+		try {
+			const event = JSON.parse(text) as { type?: unknown };
+			if (event.type === 'session.output_audio.delta') {
+				this.#options.onMetric?.('openai_first_output_audio_delta');
+			}
+			if (event.type === 'session.output_transcript.delta') {
+				this.#options.onMetric?.('openai_first_output_transcript_delta');
+			}
+		} catch {
+			// Ignore malformed diagnostics payloads.
 		}
 	}
 }

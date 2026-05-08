@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import AudioDevicePicker from '$lib/components/AudioDevicePicker.svelte';
+	import AudioVisualizer from '$lib/components/AudioVisualizer.svelte';
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
 	import PushToTalkButton from '$lib/components/PushToTalkButton.svelte';
@@ -40,8 +41,10 @@
 	let remoteAudioElement = $state<HTMLAudioElement>();
 	let audioPickerOpen = $state(false);
 	let remoteMicrophoneTrackId = '';
+	let latencyMarks = $state<Record<string, number>>({});
+	let latencyRows = $state<Array<{ label: string; value: string }>>([]);
 
-	let micStream: MediaStream | undefined;
+	let micStream = $state<MediaStream | undefined>(undefined);
 	let remoteMicrophoneTrack: MediaStreamTrack | undefined;
 	let livekitClient: LiveKitRoomClient | undefined;
 	let openaiClient: OpenAIRealtimeClient | undefined;
@@ -78,6 +81,14 @@
 	let isInSetup = $derived(
 		uiState === 'idle' || uiState === 'microphone_denied' || uiState === 'error'
 	);
+	let vizStream = $derived(
+		uiState === 'speaking'
+			? micStream
+			: translatedAudioStream && !muted
+				? translatedAudioStream
+				: undefined
+	);
+	let vizColor = $derived<'green' | 'purple'>(uiState === 'speaking' ? 'green' : 'purple');
 
 	async function join() {
 		unlockClickAudio();
@@ -146,9 +157,12 @@
 				}
 			},
 			onRemoteMicrophoneMuted: () => {
+				markLatency('livekit_remote_ptt_off');
 				scheduleIdleDisconnect();
 			},
 			onRemoteMicrophoneUnmuted: () => {
+				resetLatency('remote_speech');
+				markLatency('livekit_remote_ptt_on');
 				clearIdleDisconnectTimer();
 				if (!paused && !openaiClient && remoteMicrophoneTrack) {
 					void connectTranslation(remoteMicrophoneTrack);
@@ -211,6 +225,7 @@
 		openaiClient?.disconnect();
 		uiState = 'connecting_translation';
 		detail = `Connecting translation into ${getLanguageLabel(targetLanguage)}.`;
+		markLatency('translation_connect_requested');
 
 		openaiClient = new OpenAIRealtimeClient({
 			roomId,
@@ -218,7 +233,9 @@
 			targetLanguage,
 			openAITranslationLanguage: getOpenAITranslationLanguage(targetLanguage),
 			sourceTrack,
+			onMetric: (name) => markLatency(name),
 			onTranslatedAudio: (stream) => {
+				markLatency('translated_audio_stream_ready');
 				translatedAudioStream = stream;
 				uiState = 'receiving_translation';
 				detail = 'Receiving translated audio.';
@@ -342,11 +359,61 @@
 	$effect(() => {
 		if (remoteAudioElement && translatedAudioStream) {
 			remoteAudioElement.srcObject = translatedAudioStream;
-			void remoteAudioElement.play().catch(() => {
-				detail = 'Tap the screen if your browser blocks translated audio playback.';
-			});
+			markLatency('playback_attempt');
+			void remoteAudioElement
+				.play()
+				.then(() => {
+					markLatency('playback_started');
+				})
+				.catch(() => {
+					detail = 'Tap the screen if your browser blocks translated audio playback.';
+				});
 		}
 	});
+
+	function resetLatency(reason: string) {
+		latencyMarks = { latency_reset: performance.now() };
+		latencyRows = [{ label: 'trace', value: reason }];
+	}
+
+	function markLatency(name: string) {
+		const now = performance.now();
+		if (latencyMarks[name] !== undefined) return;
+
+		latencyMarks = { ...latencyMarks, [name]: now };
+		latencyRows = buildLatencyRows(latencyMarks);
+		console.debug('[langlink latency]', name, summariseLatency(latencyMarks));
+	}
+
+	function since(marks: Record<string, number>, from: string, to: string) {
+		if (marks[from] === undefined || marks[to] === undefined) return undefined;
+		return Math.round(marks[to] - marks[from]);
+	}
+
+	function formatMs(value: number | undefined) {
+		return value === undefined ? '—' : `${value} ms`;
+	}
+
+	function buildLatencyRows(marks: Record<string, number>) {
+		const start = marks.livekit_remote_ptt_on ?? marks.translation_connect_requested;
+		const fromStart = (name: string) =>
+			start === undefined || marks[name] === undefined
+				? undefined
+				: Math.round(marks[name] - start);
+
+		return [
+			{ label: 'token', value: formatMs(since(marks, 'openai_token_start', 'openai_token_end')) },
+			{ label: 'sdp', value: formatMs(since(marks, 'openai_sdp_start', 'openai_sdp_end')) },
+			{ label: 'pc ready', value: formatMs(fromStart('openai_peer_connected')) },
+			{ label: 'track', value: formatMs(fromStart('openai_translated_track')) },
+			{ label: 'first audio', value: formatMs(fromStart('openai_first_output_audio_delta')) },
+			{ label: 'playback', value: formatMs(fromStart('playback_started')) }
+		];
+	}
+
+	function summariseLatency(marks: Record<string, number>) {
+		return Object.fromEntries(buildLatencyRows(marks).map((row) => [row.label, row.value]));
+	}
 
 	$effect(() => {
 		return () => {
@@ -400,10 +467,37 @@
 							<dd>{participantCount}/2</dd>
 						</div>
 					</dl>
+					<div class="viz-area">
+						<AudioVisualizer stream={vizStream} color={vizColor} />
+						<span class="viz-label mono">
+							{#if uiState === 'speaking'}
+								▶ TX · YOU
+							{:else if translatedAudioStream && !muted}
+								◀ RX · TRANSLATION
+							{:else}
+								— STANDBY
+							{/if}
+						</span>
+					</div>
 				{/if}
 
 				{#if error}
 					<p class="error">⚠ {error}</p>
+				{/if}
+
+				{#if latencyRows.length}
+					<section class="latency-panel" aria-label="Latency diagnostics">
+						<div class="latency-head">
+							<span>LATENCY</span>
+							<span>LOCAL</span>
+						</div>
+						<div class="latency-grid">
+							{#each latencyRows as row (row.label)}
+								<span>{row.label}</span>
+								<strong>{row.value}</strong>
+							{/each}
+						</div>
+					</section>
 				{/if}
 
 				{#if uiState === 'reconnecting'}
@@ -453,6 +547,31 @@
 		gap: 0.7rem;
 		height: 100%;
 		min-height: 0;
+	}
+
+	.viz-area {
+		position: relative;
+		flex: 1;
+		min-height: 4rem;
+		border-radius: 0.4rem;
+		background: oklch(0.06 0.01 145);
+		box-shadow:
+			inset 0 0 0 1px oklch(0.4 0.1 145 / 0.18),
+			inset 0 1px 4px oklch(0 0 0 / 0.6);
+		overflow: hidden;
+	}
+
+	.viz-label {
+		position: absolute;
+		top: 0.4rem;
+		left: 0.5rem;
+		font-size: 0.58rem;
+		font-weight: 700;
+		letter-spacing: 0.18em;
+		color: var(--screen-green-dim);
+		text-transform: uppercase;
+		pointer-events: none;
+		text-shadow: 0 0 4px oklch(0 0 0 / 0.8);
 	}
 
 	.lang {
@@ -554,6 +673,41 @@
 		margin: 0;
 		font-size: 0.78rem;
 		color: oklch(0.78 0.18 28);
+	}
+
+	.latency-panel {
+		display: grid;
+		gap: 0.45rem;
+		border: 1px solid oklch(0.45 0.06 150 / 0.35);
+		border-radius: 0.45rem;
+		background: oklch(0.16 0.03 150 / 0.52);
+		padding: 0.6rem;
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+	}
+
+	.latency-head,
+	.latency-grid {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 0.35rem 0.75rem;
+		align-items: baseline;
+	}
+
+	.latency-head {
+		color: var(--screen-green);
+		font-size: 0.64rem;
+		letter-spacing: 0.16em;
+	}
+
+	.latency-grid {
+		color: var(--screen-green-dim);
+		font-size: 0.68rem;
+		text-transform: uppercase;
+	}
+
+	.latency-grid strong {
+		color: var(--screen-green);
+		font-weight: 700;
 	}
 
 	.audio-host {
