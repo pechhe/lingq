@@ -5,7 +5,9 @@
 	import AudioVisualizer from '$lib/components/AudioVisualizer.svelte';
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
+	import MicDevicePicker from '$lib/components/MicDevicePicker.svelte';
 	import PushToTalkButton from '$lib/components/PushToTalkButton.svelte';
+	import QrCode from '$lib/components/QrCode.svelte';
 	import {
 		defaultHearLanguage,
 		getLanguageLabel,
@@ -13,7 +15,12 @@
 		isSupportedLanguage,
 		languages
 	} from '$lib/constants/languages';
-	import { requestMicrophone, stopStream, unlockAudioPlayback } from '$lib/realtime/audioRouting';
+	import {
+		persistMicSelection,
+		requestMicrophone,
+		stopStream,
+		unlockAudioPlayback
+	} from '$lib/realtime/audioRouting';
 	import { playClick, unlockClickAudio } from '$lib/realtime/clickSound';
 	import { LiveKitRoomClient } from '$lib/realtime/livekitRoomClient';
 	import { OpenAIRealtimeClient } from '$lib/realtime/openaiRealtimeClient';
@@ -41,7 +48,10 @@
 	let translatedAudioStream = $state<MediaStream>();
 	let remoteAudioElement = $state<HTMLAudioElement>();
 	let audioPickerOpen = $state(false);
+	let micPickerOpen = $state(false);
 	let remoteMicrophoneTrackId = '';
+	let joinUrl = $state('');
+	let qrCopied = $state(false);
 	let latencyMarks = $state<Record<string, number>>({});
 
 	let micStream = $state<MediaStream | undefined>(undefined);
@@ -49,6 +59,9 @@
 	let livekitClient: LiveKitRoomClient | undefined;
 	let openaiClient: OpenAIRealtimeClient | undefined;
 	let idleDisconnectTimer: ReturnType<typeof setTimeout> | undefined;
+	let latencyTraceId = '';
+	let latencyFlushTimer: ReturnType<typeof setTimeout> | undefined;
+	let latencyEventBuffer: Array<{ name: string; elapsedMs: number; at: number }> = [];
 
 	let roomId = $derived(params.roomId);
 	let storageKey = $derived(`langlink:${roomId}:participant`);
@@ -90,6 +103,7 @@
 				: undefined
 	);
 	let vizColor = $derived<'green' | 'purple'>(uiState === 'speaking' ? 'green' : 'purple');
+	let currentMicDeviceId = $derived(micStream?.getAudioTracks()[0]?.getSettings().deviceId);
 
 	$effect(() => {
 		const id = roomId;
@@ -100,6 +114,22 @@
 			isHost = true;
 		}
 	});
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		joinUrl = `${window.location.origin}/room/${roomId}`;
+	});
+
+	async function copyJoinLink() {
+		if (!joinUrl) return;
+		try {
+			await navigator.clipboard.writeText(joinUrl);
+			qrCopied = true;
+			setTimeout(() => (qrCopied = false), 1500);
+		} catch {
+			// clipboard blocked
+		}
+	}
 
 	async function join() {
 		unlockClickAudio();
@@ -325,6 +355,36 @@
 		audioPickerOpen = true;
 	}
 
+	function openMicDevices() {
+		micPickerOpen = true;
+	}
+
+	async function switchMicrophone(deviceId: string) {
+		if (currentMicDeviceId === deviceId) {
+			persistMicSelection(deviceId);
+			return;
+		}
+		const wasSpeaking = uiState === 'speaking';
+		if (wasSpeaking) livekitClient?.setMicrophoneEnabled(false);
+
+		const previous = micStream;
+		const nextStream = await requestMicrophone(deviceId);
+		const [nextTrack] = nextStream.getAudioTracks();
+		if (!nextTrack) {
+			stopStream(nextStream);
+			throw new Error('Selected microphone has no audio track.');
+		}
+
+		micStream = nextStream;
+		stopStream(previous);
+		persistMicSelection(deviceId);
+
+		if (livekitClient) {
+			await livekitClient.publishMicrophoneTrack(nextTrack);
+		}
+		if (wasSpeaking) livekitClient?.setMicrophoneEnabled(true);
+	}
+
 	async function reconnectTranslation() {
 		if (remoteMicrophoneTrack) {
 			disconnectTranslationSession();
@@ -389,7 +449,9 @@
 
 	function resetLatency(reason: string) {
 		latencyMarks = { latency_reset: performance.now() };
-		console.debug('[langlink latency]', 'trace', reason);
+		latencyTraceId = crypto.randomUUID();
+		latencyEventBuffer = [];
+		recordLatencyEvent(`trace:${reason}`, 0);
 	}
 
 	function markLatency(name: string) {
@@ -397,41 +459,62 @@
 		if (latencyMarks[name] !== undefined) return;
 
 		latencyMarks = { ...latencyMarks, [name]: now };
-		console.debug('[langlink latency]', name, summariseLatency(latencyMarks));
+		recordLatencyEvent(name, now - (latencyMarks.latency_reset ?? now));
 	}
 
-	function since(marks: Record<string, number>, from: string, to: string) {
-		if (marks[from] === undefined || marks[to] === undefined) return undefined;
-		return Math.round(marks[to] - marks[from]);
+	function recordLatencyEvent(name: string, elapsedMs: number) {
+		if (!participantId || !latencyTraceId) return;
+		latencyEventBuffer = [
+			...latencyEventBuffer,
+			{
+				name,
+				elapsedMs,
+				at: Date.now()
+			}
+		].slice(-40);
+		scheduleLatencyFlush();
 	}
 
-	function formatMs(value: number | undefined) {
-		return value === undefined ? '—' : `${value} ms`;
+	function scheduleLatencyFlush() {
+		if (latencyFlushTimer) return;
+		latencyFlushTimer = setTimeout(() => {
+			latencyFlushTimer = undefined;
+			flushLatencyEvents();
+		}, 1500);
 	}
 
-	function buildLatencyRows(marks: Record<string, number>) {
-		const start = marks.livekit_remote_ptt_on ?? marks.translation_connect_requested;
-		const fromStart = (name: string) =>
-			start === undefined || marks[name] === undefined
-				? undefined
-				: Math.round(marks[name] - start);
+	function flushLatencyEvents() {
+		if (!participantId || !latencyTraceId || !latencyEventBuffer.length) return;
 
-		return [
-			{ label: 'token', value: formatMs(since(marks, 'openai_token_start', 'openai_token_end')) },
-			{ label: 'sdp', value: formatMs(since(marks, 'openai_sdp_start', 'openai_sdp_end')) },
-			{ label: 'pc ready', value: formatMs(fromStart('openai_peer_connected')) },
-			{ label: 'track', value: formatMs(fromStart('openai_translated_track')) },
-			{ label: 'first audio', value: formatMs(fromStart('openai_first_output_audio_delta')) },
-			{ label: 'playback', value: formatMs(fromStart('playback_started')) }
-		];
-	}
+		const payload = {
+			participantId,
+			traceId: latencyTraceId,
+			events: latencyEventBuffer
+		};
+		latencyEventBuffer = [];
 
-	function summariseLatency(marks: Record<string, number>) {
-		return Object.fromEntries(buildLatencyRows(marks).map((row) => [row.label, row.value]));
+		const json = JSON.stringify(payload);
+		const url = `/api/rooms/${roomId}/latency`;
+		if (navigator.sendBeacon) {
+			const sent = navigator.sendBeacon(url, new Blob([json], { type: 'application/json' }));
+			if (sent) return;
+		}
+
+		void fetch(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: json,
+			keepalive: true
+		}).catch(() => {});
 	}
 
 	$effect(() => {
 		return () => {
+			if (latencyFlushTimer) {
+				clearTimeout(latencyFlushTimer);
+				latencyFlushTimer = undefined;
+			}
+			flushLatencyEvents();
 			disconnectTranslationSession();
 			livekitClient?.disconnect();
 			stopStream(micStream);
@@ -527,6 +610,7 @@
 			{paused}
 			onmute={toggleMute}
 			onpause={togglePause}
+			onmicdevice={openMicDevices}
 			onaudiodevice={openAudioDevices}
 			onleave={leave}
 		/>
@@ -540,6 +624,11 @@
 </DeviceFrame>
 
 <AudioDevicePicker bind:open={audioPickerOpen} audioElement={remoteAudioElement} />
+<MicDevicePicker
+	bind:open={micPickerOpen}
+	selectedId={currentMicDeviceId}
+	onSelect={switchMicrophone}
+/>
 
 <audio bind:this={remoteAudioElement} class="audio-host" autoplay playsinline {muted}></audio>
 

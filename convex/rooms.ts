@@ -211,3 +211,46 @@ export const leave = mutation({
 		return { ok: true };
 	}
 });
+
+export const recordLatencyEvents = mutation({
+	args: {
+		roomId: v.string(),
+		participantId: v.string(),
+		traceId: v.string(),
+		events: v.array(
+			v.object({
+				name: v.string(),
+				elapsedMs: v.number(),
+				at: v.number()
+			})
+		),
+		userAgent: v.optional(v.string())
+	},
+	handler: async (ctx, args) => {
+		const participant = await ctx.db
+			.query('participants')
+			.withIndex('by_roomId_and_participantId', (q) =>
+				q.eq('roomId', args.roomId).eq('participantId', args.participantId)
+			)
+			.unique();
+
+		if (!participant || participant.status !== 'active') {
+			throw new Error('Participant not found');
+		}
+
+		const events = args.events.slice(0, 40);
+		for (const event of events) {
+			await ctx.db.insert('latencyEvents', {
+				roomId: args.roomId,
+				participantId: args.participantId,
+				traceId: args.traceId,
+				name: event.name,
+				elapsedMs: Math.round(event.elapsedMs),
+				at: event.at,
+				userAgent: args.userAgent?.slice(0, 240)
+			});
+		}
+
+		return { ok: true, count: events.length };
+	}
+});

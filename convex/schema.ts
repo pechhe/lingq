@@ -22,5 +22,16 @@ export default defineSchema({
 		status: v.union(v.literal('active'), v.literal('left'))
 	})
 		.index('by_roomId', ['roomId'])
-		.index('by_roomId_and_participantId', ['roomId', 'participantId'])
+		.index('by_roomId_and_participantId', ['roomId', 'participantId']),
+	latencyEvents: defineTable({
+		roomId: v.string(),
+		participantId: v.string(),
+		traceId: v.string(),
+		name: v.string(),
+		elapsedMs: v.number(),
+		at: v.number(),
+		userAgent: v.optional(v.string())
+	})
+		.index('by_roomId', ['roomId'])
+		.index('by_traceId', ['traceId'])
 });

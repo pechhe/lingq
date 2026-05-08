@@ -277,8 +277,8 @@
 
 	@media (min-width: 32rem) {
 		.device {
-			flex: 0 1 auto;
-			min-height: min(90svh, 50rem);
+			flex: 0 0 auto;
+			height: min(94svh, 56rem);
 		}
 	}
 </style>

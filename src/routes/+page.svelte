@@ -34,6 +34,13 @@
 		}
 
 		createdRoom = await response.json();
+		if (createdRoom) {
+			try {
+				localStorage.setItem(`langlink:${createdRoom.roomId}:host-lang`, spokenLanguage);
+			} catch {
+				// localStorage blocked; host will see the language picker on the room page as a fallback
+			}
+		}
 	}
 
 	function joinCreatedRoom() {
@@ -138,10 +145,6 @@
 				</DeviceButton>
 			</div>
 		{/if}
-	{/snippet}
-
-	{#snippet footer()}
-		FREE WITH YOUR OPENAI KEY · PAID PLAN COMING SOON
 	{/snippet}
 </DeviceFrame>
 

@@ -43,3 +43,13 @@ export async function updateParticipantLanguages(input: {
 }) {
 	return await getConvexClient().mutation(api.rooms.updateParticipantLanguages, input);
 }
+
+export async function recordLatencyEvents(input: {
+	roomId: string;
+	participantId: string;
+	traceId: string;
+	events: Array<{ name: string; elapsedMs: number; at: number }>;
+	userAgent?: string;
+}) {
+	return await getConvexClient().mutation(api.rooms.recordLatencyEvents, input);
+}

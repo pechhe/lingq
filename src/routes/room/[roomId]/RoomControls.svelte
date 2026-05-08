@@ -1,12 +1,13 @@
 <script lang="ts">
 	import DeviceButton from '$lib/components/DeviceButton.svelte';
-	import { Headphones, LogOut, Pause, Play, Volume2, VolumeX } from 'lucide-svelte';
+	import { Headphones, LogOut, Mic, Pause, Play, Volume2, VolumeX } from 'lucide-svelte';
 
 	let {
 		muted = false,
 		paused = false,
 		onmute,
 		onpause,
+		onmicdevice,
 		onaudiodevice,
 		onleave
 	}: {
@@ -14,6 +15,7 @@
 		paused?: boolean;
 		onmute: () => void;
 		onpause: () => void;
+		onmicdevice: () => void;
 		onaudiodevice: () => void;
 		onleave: () => void;
 	} = $props();
@@ -48,6 +50,11 @@
 		<span>{paused ? 'RESUME' : 'PAUSE'}</span>
 	</DeviceButton>
 
+	<DeviceButton ariaLabel="Choose microphone input device" onclick={onmicdevice}>
+		<Mic size={18} />
+		<span>MIC</span>
+	</DeviceButton>
+
 	<DeviceButton ariaLabel="Choose audio output device" onclick={onaudiodevice}>
 		<Headphones size={18} />
 		<span>AUDIO</span>
@@ -62,19 +69,19 @@
 <style>
 	.controls {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 0.5rem;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		gap: 0.4rem;
 	}
 
 	.controls :global(.key) {
 		flex-direction: column;
 		gap: 0.3rem;
 		min-height: 4rem;
-		padding: 0.6rem 0.4rem;
+		padding: 0.55rem 0.3rem;
 	}
 
 	.controls :global(.key span) {
-		font-size: 0.62rem;
+		font-size: 0.58rem;
 	}
 
 	@media (max-width: 380px) {
