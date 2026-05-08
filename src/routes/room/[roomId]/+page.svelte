@@ -381,7 +381,12 @@
 							{/each}
 						</select>
 					</label>
-					<button class="start" type="button" onclick={join}>
+					<button
+						class="start"
+						type="button"
+						onpointerdown={() => playClick('down')}
+						onclick={join}
+					>
 						{uiState === 'error' ? '↻ TRY AGAIN' : '▶ START ON THIS PHONE'}
 					</button>
 				{:else}
@@ -402,7 +407,12 @@
 				{/if}
 
 				{#if uiState === 'reconnecting'}
-					<button class="reconnect" type="button" onclick={reconnectTranslation}>
+					<button
+						class="reconnect"
+						type="button"
+						onpointerdown={() => playClick('down')}
+						onclick={reconnectTranslation}
+					>
 						↻ RECONNECT TRANSLATION
 					</button>
 				{/if}

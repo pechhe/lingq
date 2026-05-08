@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { playClick } from '$lib/realtime/clickSound';
 	import { X } from 'lucide-svelte';
 
 	const STORAGE_KEY = 'langlink:audio-output';
@@ -107,7 +108,13 @@
 	<div class="sheet" role="dialog" aria-modal="true" aria-label="Audio output device">
 		<header>
 			<span class="title mono">AUDIO OUT</span>
-			<button class="close" type="button" aria-label="Close" onclick={close}>
+			<button
+				class="close"
+				type="button"
+				aria-label="Close"
+				onpointerdown={() => playClick('down')}
+				onclick={close}
+			>
 				<X size={16} />
 			</button>
 		</header>
@@ -131,6 +138,7 @@
 								type="button"
 								class="device"
 								class:selected={selectedId === device.deviceId}
+								onpointerdown={() => playClick('down')}
 								onclick={() => pick(device.deviceId)}
 							>
 								<span class="dot" aria-hidden="true"></span>

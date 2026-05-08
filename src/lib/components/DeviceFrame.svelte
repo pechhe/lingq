@@ -61,10 +61,8 @@
 		gap: 0.85rem;
 		width: 100%;
 		min-height: 100svh;
-		padding:
-			calc(env(safe-area-inset-top, 0px) + clamp(0.5rem, 2vw, 1.5rem))
-			clamp(0.5rem, 2vw, 1.5rem)
-			calc(env(safe-area-inset-bottom, 0px) + clamp(0.5rem, 2vw, 1.5rem));
+		padding: calc(env(safe-area-inset-top, 0px) + clamp(0.5rem, 2vw, 1.5rem))
+			clamp(0.5rem, 2vw, 1.5rem) calc(env(safe-area-inset-bottom, 0px) + clamp(0.5rem, 2vw, 1.5rem));
 	}
 
 	.device {
@@ -76,8 +74,7 @@
 		max-width: 26rem;
 		flex: 1;
 		min-height: 0;
-		padding: clamp(0.85rem, 3vw, 1.2rem) clamp(0.85rem, 3vw, 1.2rem)
-			clamp(0.7rem, 2.5vw, 0.95rem);
+		padding: clamp(0.85rem, 3vw, 1.2rem) clamp(0.85rem, 3vw, 1.2rem) clamp(0.7rem, 2.5vw, 0.95rem);
 		padding-left: clamp(2.2rem, 7vw, 2.8rem);
 		border-radius: clamp(1.6rem, 4vw, 2.4rem);
 		background: linear-gradient(

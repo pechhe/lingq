@@ -6,7 +6,7 @@
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
 	import QrCode from '$lib/components/QrCode.svelte';
 	import { defaultHearLanguage, languages } from '$lib/constants/languages';
-	import { unlockClickAudio } from '$lib/realtime/clickSound';
+	import { playClick, unlockClickAudio } from '$lib/realtime/clickSound';
 
 	let spokenLanguage = $state(defaultHearLanguage('en'));
 	let pending = $state(false);
@@ -108,7 +108,12 @@
 					<div class="room-meta">
 						<p class="kicker">SCAN OR TAP</p>
 						<p class="room-id">{createdRoom.roomId}</p>
-						<button type="button" class="link" onclick={copyLink}>
+						<button
+							type="button"
+							class="link"
+							onpointerdown={() => playClick('down')}
+							onclick={copyLink}
+						>
 							<span>{createdRoom.joinUrl}</span>
 							<span class="copy">{copied ? 'COPIED' : 'COPY'}</span>
 						</button>
