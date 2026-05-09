@@ -1,4 +1,4 @@
-# LangLink
+# Lingk
 
 Mobile-first MVP for two-person spoken translation.
 

@@ -78,6 +78,7 @@
 	}
 
 	.key {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -93,6 +94,7 @@
 		letter-spacing: 0.12em;
 		text-transform: uppercase;
 		color: var(--ink);
+		overflow: hidden;
 		background: linear-gradient(
 			160deg,
 			oklch(0.32 0.005 250) 0%,
@@ -123,19 +125,34 @@
 
 	.key[data-tone='orange'] {
 		color: oklch(0.16 0.04 50);
-		background: linear-gradient(
-			145deg,
-			oklch(0.86 0.16 65) 0%,
-			oklch(0.72 0.19 55) 50%,
-			oklch(0.55 0.21 50) 100%
-		);
+		background: var(--orange-metal-bg);
+		box-shadow: var(--orange-metal-shadow);
+	}
+
+	.key[data-tone='orange']::before,
+	.key[data-tone='orange']::after {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+	}
+
+	.key[data-tone='orange']::before {
+		inset: 0;
+		border-radius: inherit;
+		background: var(--orange-metal-sheen);
+	}
+
+	.key[data-tone='orange']::after {
+		inset: 0.18rem;
+		border-radius: calc(0.5rem - 0.08rem);
 		box-shadow:
-			inset 1px 1px 0 oklch(0.96 0.1 70 / 0.85),
-			inset 0 1px 0 oklch(0.94 0.12 70 / 0.7),
-			inset -1px -1px 0 oklch(0.3 0.1 50 / 0.55),
-			inset 0 -1px 0 oklch(0.3 0.1 50 / 0.5),
-			0 1px 2px oklch(0 0 0 / 0.4),
-			0 0 10px oklch(0.7 0.18 55 / 0.2);
+			inset 1px 1px 0 oklch(1 0.07 74 / 0.24),
+			inset -1px -1px 0 oklch(0.28 0.12 46 / 0.26);
+	}
+
+	.key[data-tone='orange'] :global(*) {
+		position: relative;
+		z-index: 1;
 	}
 
 	.key[data-tone='red'] {
@@ -168,7 +185,15 @@
 	}
 
 	.key.pressed[data-tone='orange'] {
-		background: linear-gradient(180deg, oklch(0.7 0.2 55) 0%, oklch(0.55 0.2 50) 100%);
+		background:
+			repeating-linear-gradient(
+				90deg,
+				oklch(1 0.03 74 / 0.06) 0px,
+				oklch(1 0.03 74 / 0.06) 1px,
+				transparent 1px,
+				transparent 5px
+			),
+			linear-gradient(180deg, oklch(0.68 0.22 55) 0%, oklch(0.52 0.2 50) 100%);
 	}
 
 	.key:disabled {

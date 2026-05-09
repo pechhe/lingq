@@ -10,9 +10,24 @@ import authConfig from './auth.config';
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
+const getTrustedOrigins = () =>
+	[
+		process.env.SITE_URL,
+		'https://lingk.world',
+		'https://langlink-two.vercel.app',
+		'http://localhost:5173',
+		'http://localhost:5174',
+		'http://localhost:5175',
+		'http://127.0.0.1:5173',
+		'http://127.0.0.1:5174',
+		'http://127.0.0.1:5175'
+	].filter((origin): origin is string => Boolean(origin));
+
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
 	betterAuth({
 		baseURL: process.env.SITE_URL,
+		secret: process.env.BETTER_AUTH_SECRET,
+		trustedOrigins: getTrustedOrigins(),
 		database: authComponent.adapter(ctx),
 		emailAndPassword: {
 			enabled: true,
@@ -23,36 +38,37 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 			magicLink({
 				expiresIn: 10 * 60,
 				sendMagicLink: async ({ email, url }) => {
-					const apiKey = process.env.RESEND_API_KEY;
-					const from = process.env.AUTH_EMAIL_FROM ?? 'LangLink <login@langlink.app>';
+					const serverToken = process.env.POSTMARK_SERVER_TOKEN;
+					const from = process.env.AUTH_EMAIL_FROM ?? 'Lingk <login@lingk.world>';
 
-					if (!apiKey) {
+					if (!serverToken) {
 						console.warn(`Magic link for ${email}: ${url}`);
 						return;
 					}
 
-					const response = await fetch('https://api.resend.com/emails', {
+					const response = await fetch('https://api.postmarkapp.com/email', {
 						method: 'POST',
 						headers: {
-							Authorization: `Bearer ${apiKey}`,
+							'X-Postmark-Server-Token': serverToken,
 							'Content-Type': 'application/json'
 						},
 						body: JSON.stringify({
-							from,
-							to: email,
-							subject: 'Sign in to LangLink',
-							html: `<p>Open this link on your phone to sign in to LangLink:</p><p><a href="${url}">Sign in to LangLink</a></p><p>This link expires in 10 minutes.</p>`,
-							text: `Open this link on your phone to sign in to LangLink:\n\n${url}\n\nThis link expires in 10 minutes.`
+							From: from,
+							To: email,
+							Subject: 'Sign in to Lingk',
+							HtmlBody: `<p>Open this link on your phone to sign in to Lingk:</p><p><a href="${url}">Sign in to Lingk</a></p><p>This link expires in 10 minutes.</p>`,
+							TextBody: `Open this link on your phone to sign in to Lingk:\n\n${url}\n\nThis link expires in 10 minutes.`,
+							MessageStream: 'outbound'
 						})
 					});
 
 					if (!response.ok) {
-						throw new Error(`Resend failed with ${response.status}`);
+						throw new Error(`Postmark failed with ${response.status}`);
 					}
 				}
 			}),
 			passkey({
-				rpName: 'LangLink',
+				rpName: 'Lingk',
 				authenticatorSelection: {
 					authenticatorAttachment: 'platform',
 					residentKey: 'preferred',

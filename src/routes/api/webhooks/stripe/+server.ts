@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { ensureBillingAccount } from '$lib/server/access';
 import { upsertSubscription, type PlanId } from '$lib/server/billing';
 import { getStripeEnv } from '$lib/server/env';
+import type { RequestHandler } from './$types';
 
 function normaliseStatus(status: Stripe.Subscription.Status) {
 	if (status === 'canceled') return 'cancelled';
@@ -51,7 +52,7 @@ async function syncSubscription(subscription: Stripe.Subscription) {
 	return { ok: true };
 }
 
-export async function POST({ request }) {
+export const POST: RequestHandler = async ({ request }) => {
 	const stripeEnv = getStripeEnv();
 	const stripe = new Stripe(stripeEnv.secretKey);
 	const signature = request.headers.get('stripe-signature');
@@ -76,4 +77,4 @@ export async function POST({ request }) {
 	}
 
 	return json({ ok: true, ignored: true });
-}
+};

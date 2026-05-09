@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { WebhookReceiver } from 'livekit-server-sdk';
 import { endUsageSession, startUsageSession } from '$lib/server/billing';
 import { getLiveKitEnv } from '$lib/server/env';
+import type { RequestHandler } from './$types';
 
 function participantSessionId(roomId: string, participantId: string) {
 	return `livekit:participant:${roomId}:${participantId}`;
@@ -11,7 +12,7 @@ function roomSessionId(roomId: string) {
 	return `livekit:room:${roomId}`;
 }
 
-export async function POST({ request }) {
+export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.text();
 	const authHeader = request.headers.get('Authorization') ?? undefined;
 	const { livekitApiKey, livekitApiSecret } = getLiveKitEnv();
@@ -68,4 +69,4 @@ export async function POST({ request }) {
 	}
 
 	return json({ ok: true });
-}
+};

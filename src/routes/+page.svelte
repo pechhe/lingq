@@ -1,50 +1,31 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
 	import DeviceButton from '$lib/components/DeviceButton.svelte';
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
 	import { authClient } from '$lib/auth-client';
 
-	type PlanId = 'talk_1h' | 'talk_5h';
-
-	let openaiApiKey = $state('');
-	let billingEmail = $state('');
-	let authName = $state('');
-	let authPassword = $state('');
-	let authMode = $state<'link' | 'sign-in' | 'password'>('link');
-	let pendingPlan = $state<PlanId | null>(null);
+	let email = $state('');
+	let pending = $state(false);
 	let error = $state('');
 	let notice = $state('');
-
-	function useOwnKey() {
-		error = '';
-		const trimmedKey = openaiApiKey.trim();
-
-		if (!trimmedKey.startsWith('sk-')) {
-			error = 'Enter a valid OpenAI API key';
-			return;
-		}
-
-		localStorage.setItem('langlink:openai-api-key', trimmedKey);
-		goto(resolve('/setup'));
-	}
 
 	function tryNow() {
 		goto(resolve('/setup?access=trial'));
 	}
 
-	function useInstalledKey() {
-		goto(resolve('/setup?access=test'));
-	}
+	async function register() {
+		const trimmedEmail = email.trim();
+		error = '';
+		notice = '';
 
-	async function sendEmailLink(planId: PlanId) {
-		const email = billingEmail.trim();
-
-		if (!email) {
-			throw new Error('Enter your email');
+		if (!trimmedEmail) {
+			error = 'Enter your email';
+			return;
 		}
+
+		pending = true;
 
 		const client = authClient as typeof authClient & {
 			signIn: {
@@ -55,128 +36,34 @@
 					newUserCallbackURL?: string;
 					errorCallbackURL?: string;
 				}): Promise<{ error?: { message?: string } }>;
-				email(input: {
-					email: string;
-					password: string;
-				}): Promise<{ error?: { message?: string } }>;
-				passkey(input?: { autoFill?: boolean }): Promise<{ error?: { message?: string } }>;
-			};
-			passkey: {
-				addPasskey(input?: {
-					name?: string;
-					authenticatorAttachment?: 'platform' | 'cross-platform';
-				}): Promise<{ error?: { message?: string } }>;
 			};
 		};
 
-		if (authMode === 'sign-in') {
-			const result = await client.signIn.passkey();
-			if (result.error) {
-				throw new Error(result.error.message ?? 'Could not sign in with passkey');
-			}
-			return;
-		}
-
-		if (authMode === 'password') {
-			if (authPassword.trim().length < 8) {
-				throw new Error('Enter your fallback password');
-			}
-			const result = await client.signIn.email({ email, password: authPassword.trim() });
-			if (result.error) {
-				throw new Error(result.error.message ?? 'Could not sign in with password');
-			}
-			return;
-		}
-
-		const callbackURL = `/?auth=verified&plan=${planId}`;
 		const result = await client.signIn.magicLink({
-			email,
-			name: authName.trim() || email,
-			callbackURL,
-			newUserCallbackURL: callbackURL,
+			email: trimmedEmail,
+			name: trimmedEmail,
+			callbackURL: '/account?auth=verified',
+			newUserCallbackURL: '/account?auth=verified',
 			errorCallbackURL: '/?auth=error'
 		});
 
+		pending = false;
+
 		if (result.error) {
-			throw new Error(result.error.message ?? 'Could not send sign-in link');
-		}
-
-		notice = 'Check your email on this phone, then open the LangLink link.';
-		throw new Error('Check your email for the sign-in link');
-	}
-
-	async function savePasskey() {
-		error = '';
-		notice = '';
-		const client = authClient as typeof authClient & {
-			passkey: {
-				addPasskey(input?: {
-					name?: string;
-					authenticatorAttachment?: 'platform' | 'cross-platform';
-				}): Promise<{ error?: { message?: string } }>;
-			};
-		};
-		const passkeyResult = await client.passkey.addPasskey({
-			name: 'LangLink passkey',
-			authenticatorAttachment: 'platform'
-		});
-		if (passkeyResult.error) {
-			error = passkeyResult.error.message ?? 'Could not create passkey';
-			return;
-		}
-		const plan = page.url.searchParams.get('plan');
-		if (plan === 'talk_1h' || plan === 'talk_5h') {
-			await startCheckout(plan);
-			return;
-		}
-		notice = 'Passkey saved.';
-	}
-
-	async function startCheckout(planId: PlanId) {
-		pendingPlan = planId;
-		const response = await fetch('/api/billing/checkout', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ planId, email: billingEmail.trim() || undefined })
-		});
-
-		pendingPlan = null;
-
-		if (!response.ok) {
-			error = await response.text();
+			error = result.error.message ?? 'Could not send sign-in link';
 			return;
 		}
 
-		const { url } = await response.json();
-		location.href = url;
-	}
-
-	async function subscribe(planId: PlanId) {
-		error = '';
-		notice = '';
-		pendingPlan = planId;
-
-		try {
-			await sendEmailLink(planId);
-			await startCheckout(planId);
-		} catch (cause) {
-			pendingPlan = null;
-			if (!notice) {
-				error = cause instanceof Error ? cause.message : 'Could not authenticate';
-			}
-		}
+		notice = 'Check your email, then open the Lingk link.';
 	}
 </script>
 
 <svelte:head>
-	<title>LangLink Access</title>
-	<meta
-		name="description"
-		content="Choose an OpenAI key or a LangLink talk-time subscription before creating a translation room."
-	/>
+	<title>Lingk</title>
+	<meta name="description" content="Try live two-phone spoken translation in a few taps." />
 </svelte:head>
 
-<DeviceFrame topLed="ready" topLabel="LANGLINK · ACCESS">
+<DeviceFrame topLed="ready" topLabel="LINGK · ACCESS">
 	{#snippet display()}
 		<div class="earpiece" aria-hidden="true">
 			<span class="earpiece-bar"></span>
@@ -184,98 +71,41 @@
 
 		<DeviceScreen tone="amber">
 			<div class="screen-stack">
-				<header class="screen-head crt-fringe">
-					<span>ACCESS</span>
-					<span class="status">▮ READY</span>
-				</header>
-
-				<section class="intro crt-fringe">
-					<p class="kicker">START TALKING</p>
-					<h1>Try two mins.<br />Pay with wallet<br />or use a key.</h1>
+				<section class="product-brief">
+					<picture>
+						<img
+							class="product-infographic"
+							src="/images/home-product-infographic.png"
+							width="916"
+							height="1717"
+							decoding="async"
+							fetchpriority="high"
+							alt="Lingk. Live translation in real time. Face to face. Group discussions. Speeches and events. Weddings. Talk naturally, hear your language."
+						/>
+					</picture>
+					<p class="sr-only">
+						Lingk provides live translation in real time for face-to-face conversations, group
+						discussions, speeches, events and weddings. Talk naturally and hear your language.
+					</p>
 				</section>
 
 				<section class="panel">
-					<label class="field">
-						<span class="field-label crt-fringe">OPENAI API KEY</span>
-						<input
-							bind:value={openaiApiKey}
-							type="password"
-							placeholder="sk-..."
-							autocomplete="off"
-							spellcheck="false"
-						/>
-					</label>
-					<DeviceButton tone="orange" size="sm" onclick={useOwnKey}>
-						<span>USE MY KEY</span>
-					</DeviceButton>
-					<DeviceButton size="sm" onclick={useInstalledKey}>
-						<span>TEST INSTALLED KEY</span>
-					</DeviceButton>
-				</section>
-
-				<section class="panel account">
-					<div class="mode-row">
-						<button
-							type="button"
-							class:active={authMode === 'link'}
-							onclick={() => (authMode = 'link')}>EMAIL LINK</button
-						>
-						<button
-							type="button"
-							class:active={authMode === 'sign-in'}
-							onclick={() => (authMode = 'sign-in')}>PASSKEY</button
-						>
-						<button
-							type="button"
-							class:active={authMode === 'password'}
-							onclick={() => (authMode = 'password')}>PASSWORD</button
-						>
-					</div>
-					{#if authMode === 'link'}
-						<label class="field">
-							<span class="field-label crt-fringe">NAME</span>
-							<input
-								bind:value={authName}
-								type="text"
-								placeholder="Your name"
-								autocomplete="name"
-							/>
-						</label>
-					{/if}
+					<p class="panel-title crt-fringe">REGISTER</p>
 					<label class="field">
 						<span class="field-label crt-fringe">EMAIL</span>
 						<input
-							bind:value={billingEmail}
+							bind:value={email}
 							type="email"
 							placeholder="you@example.com"
 							autocomplete="email"
+							onkeydown={(event) => {
+								if (event.key === 'Enter') register();
+							}}
 						/>
 					</label>
-					<label class="field">
-						<span class="field-label crt-fringe">PASSWORD</span>
-						<input
-							bind:value={authPassword}
-							type="password"
-							placeholder="Fallback only"
-							autocomplete="current-password"
-							disabled={authMode !== 'password'}
-						/>
-					</label>
-					{#if page.url.searchParams.get('auth') === 'verified'}
-						<DeviceButton tone="orange" size="sm" onclick={savePasskey}>
-							<span>SAVE PASSKEY</span>
-						</DeviceButton>
-					{/if}
-					<div class="plan-grid">
-						<button type="button" class="plan" onclick={() => subscribe('talk_1h')}>
-							<span>£2</span>
-							<strong>{pendingPlan === 'talk_1h' ? 'WAIT' : '1 HR'}</strong>
-						</button>
-						<button type="button" class="plan" onclick={() => subscribe('talk_5h')}>
-							<span>£10</span>
-							<strong>{pendingPlan === 'talk_5h' ? 'WAIT' : '5 HRS'}</strong>
-						</button>
-					</div>
+					<DeviceButton tone="orange" size="sm" disabled={pending} onclick={register}>
+						<span>{pending ? 'SENDING' : 'REGISTER'}</span>
+					</DeviceButton>
 				</section>
 
 				{#if error}
@@ -289,14 +119,9 @@
 	{/snippet}
 
 	{#snippet front()}
-		<div class="primary-row">
-			<DeviceButton tone="orange" size="lg" onclick={tryNow}>
-				<span>TRY NOW</span>
-			</DeviceButton>
-			<DeviceButton size="lg" onclick={() => subscribe('talk_1h')}>
-				<span>PAY/BYOK</span>
-			</DeviceButton>
-		</div>
+		<DeviceButton tone="orange" size="lg" onclick={tryNow}>
+			<span>TRY NOW</span>
+		</DeviceButton>
 	{/snippet}
 </DeviceFrame>
 
@@ -322,33 +147,61 @@
 	.screen-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 0.7rem;
+		gap: 0.85rem;
 		height: 100%;
 		min-height: inherit;
+		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: oklch(0.4 0.11 70 / 0.45) transparent;
 	}
 
-	.screen-head {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		font-size: 0.62rem;
-		letter-spacing: 0.18em;
-		color: var(--screen-amber-dim);
-		text-transform: uppercase;
+	:global(.screen[data-tone='amber'] .content) {
+		padding: 0;
 	}
 
-	.screen-head .status,
-	.plan strong {
-		color: var(--screen-amber);
+	.product-brief {
+		position: relative;
+		flex: 0 0 auto;
+		width: 100%;
+		margin: 0;
+		border-radius: 0;
+		background: oklch(0.045 0.015 145);
+		overflow: hidden;
 	}
 
-	.intro {
-		display: flex;
-		flex-direction: column;
-		gap: 0.45rem;
+	.product-brief picture {
+		display: block;
+		width: 100%;
+		height: auto;
 	}
 
-	.kicker {
+	.product-brief::before,
+	.product-brief::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		pointer-events: none;
+		background-image: url('/images/home-product-infographic.png');
+		background-position: center top;
+		background-size: 100% auto;
+		background-repeat: no-repeat;
+		mix-blend-mode: screen;
+	}
+
+	.product-brief::before {
+		opacity: 0.22;
+		filter: hue-rotate(135deg) saturate(2.1) contrast(1.15);
+		transform: translateX(-1.8px);
+	}
+
+	.product-brief::after {
+		opacity: 0.18;
+		filter: hue-rotate(260deg) saturate(2) contrast(1.12);
+		transform: translateX(2px);
+	}
+
+	.panel-title {
 		margin: 0;
 		font-size: 0.62rem;
 		font-weight: 700;
@@ -357,20 +210,29 @@
 		text-transform: uppercase;
 	}
 
-	h1 {
-		margin: 0;
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: clamp(1.05rem, 5vw, 1.55rem);
-		font-weight: 600;
-		line-height: 1.18;
-		color: var(--screen-amber);
-		letter-spacing: 0;
+	.product-infographic {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.panel {
 		display: grid;
-		gap: 0.5rem;
-		padding: 0.65rem;
+		gap: 0.6rem;
+		margin: 0 0.85rem 0.85rem;
+		padding: 0.7rem;
 		border: 1px solid oklch(0.45 0.1 70 / 0.35);
 		border-radius: 0.4rem;
 		background: oklch(0.1 0.02 60 / 0.7);
@@ -392,7 +254,7 @@
 	input {
 		width: 100%;
 		min-width: 0;
-		padding: 0.65rem 0.75rem;
+		padding: 0.7rem 0.75rem;
 		border: 1px solid oklch(0.45 0.1 70 / 0.45);
 		border-radius: 0.35rem;
 		background: oklch(0.12 0.02 60);
@@ -404,59 +266,6 @@
 
 	input::placeholder {
 		color: var(--screen-amber-dim);
-	}
-
-	.mode-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
-		gap: 0.4rem;
-	}
-
-	.mode-row button {
-		padding: 0.45rem 0.5rem;
-		border: 1px solid oklch(0.45 0.1 70 / 0.35);
-		border-radius: 0.3rem;
-		background: oklch(0.12 0.02 60);
-		color: var(--screen-amber-dim);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.68rem;
-		font-weight: 700;
-		letter-spacing: 0.12em;
-	}
-
-	.mode-row button.active {
-		color: var(--screen-amber);
-		border-color: oklch(0.55 0.13 70 / 0.7);
-	}
-
-	.plan-grid,
-	.primary-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem;
-	}
-
-	.plan {
-		display: grid;
-		gap: 0.2rem;
-		padding: 0.6rem;
-		border: 1px solid oklch(0.45 0.1 70 / 0.45);
-		border-radius: 0.35rem;
-		background: oklch(0.12 0.02 60);
-		color: var(--screen-amber-dim);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		text-align: left;
-	}
-
-	.plan span {
-		font-size: 0.72rem;
-		font-weight: 700;
-		letter-spacing: 0.12em;
-	}
-
-	.plan strong {
-		font-size: 0.95rem;
-		letter-spacing: 0.14em;
 	}
 
 	.error,

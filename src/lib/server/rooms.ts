@@ -1,4 +1,5 @@
 import { api } from '../../../convex/_generated/api';
+import { normaliseRoomId } from '$lib/roomIds';
 import { getConvexClient } from './convex';
 
 export type CreateRoomInput = {
@@ -32,11 +33,14 @@ export async function createRoom(input: CreateRoomInput) {
 }
 
 export async function joinRoom(input: JoinRoomInput) {
-	return await getConvexClient().mutation(api.rooms.join, input);
+	return await getConvexClient().mutation(api.rooms.join, {
+		...input,
+		roomId: normaliseRoomId(input.roomId)
+	});
 }
 
 export async function getRoom(roomId: string) {
-	return await getConvexClient().query(api.rooms.get, { roomId });
+	return await getConvexClient().query(api.rooms.get, { roomId: normaliseRoomId(roomId) });
 }
 
 export async function updateParticipantLanguages(input: {
@@ -45,7 +49,10 @@ export async function updateParticipantLanguages(input: {
 	spokenLanguage: string;
 	hearLanguage: string;
 }) {
-	return await getConvexClient().mutation(api.rooms.updateParticipantLanguages, input);
+	return await getConvexClient().mutation(api.rooms.updateParticipantLanguages, {
+		...input,
+		roomId: normaliseRoomId(input.roomId)
+	});
 }
 
 export async function recordLatencyEvents(input: {
@@ -55,5 +62,8 @@ export async function recordLatencyEvents(input: {
 	events: Array<{ name: string; elapsedMs: number; at: number }>;
 	userAgent?: string;
 }) {
-	return await getConvexClient().mutation(api.rooms.recordLatencyEvents, input);
+	return await getConvexClient().mutation(api.rooms.recordLatencyEvents, {
+		...input,
+		roomId: normaliseRoomId(input.roomId)
+	});
 }

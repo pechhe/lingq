@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query, type MutationCtx } from './_generated/server';
+import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 
 const planAllowances = {
 	talk_1h: 60,
@@ -21,6 +21,43 @@ async function getRoomAccount(ctx: MutationCtx, roomId: string) {
 	}
 
 	return { room, accountId: room.accountId };
+}
+
+async function getCurrentSubscription(ctx: QueryCtx, accountId: string, now: number) {
+	const candidates = [
+		...(await ctx.db
+			.query('subscriptions')
+			.withIndex('by_accountId_and_status_and_currentPeriodEnd', (q) =>
+				q.eq('accountId', accountId).eq('status', 'active').gt('currentPeriodEnd', now)
+			)
+			.order('desc')
+			.take(10)),
+		...(await ctx.db
+			.query('subscriptions')
+			.withIndex('by_accountId_and_status_and_currentPeriodEnd', (q) =>
+				q.eq('accountId', accountId).eq('status', 'trialing').gt('currentPeriodEnd', now)
+			)
+			.order('desc')
+			.take(10))
+	];
+
+	return candidates
+		.filter((candidate) => candidate.currentPeriodStart <= now)
+		.sort((a, b) => b.currentPeriodEnd - a.currentPeriodEnd)[0];
+}
+
+async function sumLivekitRoomUsageMinutes(ctx: QueryCtx, accountId: string, periodStart?: number) {
+	let usedMinutes = 0;
+	const query = ctx.db.query('usageLedger').withIndex('by_accountId_and_kind_and_at', (q) => {
+		const accountAndKind = q.eq('accountId', accountId).eq('kind', 'livekit_room');
+		return periodStart === undefined ? accountAndKind : accountAndKind.gte('at', periodStart);
+	});
+
+	for await (const entry of query) {
+		usedMinutes += entry.minutes;
+	}
+
+	return usedMinutes;
 }
 
 export const upsertAccount = mutation({
@@ -136,28 +173,11 @@ export const getEntitlement = query({
 			};
 		}
 
-		const subscriptions = await ctx.db
-			.query('subscriptions')
-			.withIndex('by_accountId', (q) => q.eq('accountId', args.accountId))
-			.collect();
-		const subscription = subscriptions
-			.filter(
-				(candidate) =>
-					(candidate.status === 'active' || candidate.status === 'trialing') &&
-					candidate.currentPeriodStart <= now &&
-					candidate.currentPeriodEnd > now
-			)
-			.sort((a, b) => b.currentPeriodEnd - a.currentPeriodEnd)[0];
+		const subscription = await getCurrentSubscription(ctx, args.accountId, now);
 
 		if (!subscription) {
 			const trialAllowanceMinutes = account?.trialAllowanceMinutes ?? 2;
-			const trialLedger = await ctx.db
-				.query('usageLedger')
-				.withIndex('by_accountId', (q) => q.eq('accountId', args.accountId))
-				.collect();
-			const trialUsedMinutes = trialLedger
-				.filter((entry) => entry.kind === 'livekit_room')
-				.reduce((total, entry) => total + entry.minutes, 0);
+			const trialUsedMinutes = await sumLivekitRoomUsageMinutes(ctx, args.accountId);
 			return {
 				active: trialUsedMinutes < trialAllowanceMinutes,
 				kind: 'trial' as const,
@@ -167,15 +187,11 @@ export const getEntitlement = query({
 			};
 		}
 
-		const ledger = await ctx.db
-			.query('usageLedger')
-			.withIndex('by_accountId', (q) => q.eq('accountId', args.accountId))
-			.collect();
-		const usedMinutes = ledger
-			.filter(
-				(entry) => entry.kind === 'livekit_room' && entry.at >= subscription.currentPeriodStart
-			)
-			.reduce((total, entry) => total + entry.minutes, 0);
+		const usedMinutes = await sumLivekitRoomUsageMinutes(
+			ctx,
+			args.accountId,
+			subscription.currentPeriodStart
+		);
 
 		return {
 			active: true,

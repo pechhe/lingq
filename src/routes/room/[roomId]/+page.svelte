@@ -4,8 +4,10 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import AudioDevicePicker from '$lib/components/AudioDevicePicker.svelte';
 	import AudioVisualizer from '$lib/components/AudioVisualizer.svelte';
+	import DeviceButton from '$lib/components/DeviceButton.svelte';
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
+	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
 	import MicDevicePicker from '$lib/components/MicDevicePicker.svelte';
 	import PushToTalkButton from '$lib/components/PushToTalkButton.svelte';
 	import QrCode from '$lib/components/QrCode.svelte';
@@ -14,7 +16,7 @@
 		getLanguageLabel,
 		getOpenAITranslationLanguage,
 		isSupportedLanguage,
-		languages
+		type LanguageCode
 	} from '$lib/constants/languages';
 	import { createAudioLevelMeter, type AudioLevelMeter } from '$lib/realtime/audioLevel';
 	import {
@@ -36,7 +38,7 @@
 
 	let { params } = $props();
 
-	let spokenLanguage = $state(defaultHearLanguage('en'));
+	let spokenLanguage = $state<LanguageCode>(defaultHearLanguage('en'));
 	let targetLanguage = $state('');
 	let participantId = $state('');
 	let uiState = $state<RoomUiState>('idle');
@@ -54,6 +56,9 @@
 	let activeParticipants = $state<
 		Array<{ participantId: string; status: string; spokenLanguage: string; hearLanguage: string }>
 	>([]);
+	let showInstructions = $state(true);
+	let instructionsExiting = $state(false);
+	let incomingTranslationState = $state<'idle' | 'streaming' | 'complete' | 'interrupted'>('idle');
 	let incomingTranslationTrackId = '';
 	let joinUrl = $state('');
 	let qrCopied = $state(false);
@@ -67,6 +72,7 @@
 	let directRemoteMicrophoneTrackId = '';
 	let idleDisconnectTimer: ReturnType<typeof setTimeout> | undefined;
 	let participantPollTimer: ReturnType<typeof setInterval> | undefined;
+	let participantRefreshInFlight = false;
 	let translatedAudioEnergyMeter: AudioLevelMeter | undefined;
 	let translatedAudioEnergyTimer: ReturnType<typeof setInterval> | undefined;
 	let latencyTraceId = '';
@@ -74,7 +80,7 @@
 	let latencyEventBuffer: Array<{ name: string; elapsedMs: number; at: number }> = [];
 
 	let roomId = $derived(params.roomId);
-	let storageKey = $derived(`langlink:${roomId}:participant`);
+	let storageKey = $derived(`lingk:${roomId}:participant`);
 
 	let micLevel = $derived<StatusLevel>(
 		uiState === 'microphone_denied'
@@ -113,12 +119,19 @@
 				: undefined
 	);
 	let vizColor = $derived<'green' | 'purple'>(uiState === 'speaking' ? 'green' : 'purple');
+	let rxState = $derived<'idle' | 'receiving' | 'done'>(
+		incomingTranslationState === 'streaming'
+			? 'receiving'
+			: incomingTranslationState === 'complete'
+				? 'done'
+				: 'idle'
+	);
 	let currentMicDeviceId = $derived(micStream?.getAudioTracks()[0]?.getSettings().deviceId);
 
 	$effect(() => {
 		const id = roomId;
 		if (typeof localStorage === 'undefined') return;
-		const stored = localStorage.getItem(`langlink:${id}:host-lang`);
+		const stored = localStorage.getItem(`lingk:${id}:host-lang`);
 		if (stored && isSupportedLanguage(stored)) {
 			spokenLanguage = stored;
 			isHost = true;
@@ -141,6 +154,15 @@
 		}
 	}
 
+	function continueFromInstructions() {
+		if (instructionsExiting) return;
+		instructionsExiting = true;
+		setTimeout(() => {
+			showInstructions = false;
+			instructionsExiting = false;
+		}, 720);
+	}
+
 	async function join() {
 		unlockClickAudio();
 		uiState = 'requesting_microphone';
@@ -160,30 +182,39 @@
 		uiState = 'joining_room';
 		detail = 'Joining the room.';
 
-		const storedParticipantId = localStorage.getItem(storageKey);
-		const joinResponse = await fetch(`/api/rooms/${roomId}/join`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				spokenLanguage,
-				participantId: storedParticipantId
-			})
-		});
+		try {
+			const storedParticipantId = localStorage.getItem(storageKey);
+			const joinResponse = await fetch(`/api/rooms/${roomId}/join`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					spokenLanguage,
+					participantId: storedParticipantId
+				})
+			});
 
-		if (!joinResponse.ok) {
+			if (!joinResponse.ok) {
+				throw new Error(await joinResponse.text());
+			}
+
+			const joinResult = await joinResponse.json();
+			participantId = joinResult.participant.participantId;
+			targetLanguage = spokenLanguage;
+			localStorage.setItem(storageKey, participantId);
+
+			await connectLiveKit();
+			enterWaitingForOtherParticipant();
+		} catch (cause) {
 			uiState = 'error';
-			error = await joinResponse.text();
+			error = cause instanceof Error ? cause.message : 'The room could not be joined.';
 			detail = 'The room could not be joined.';
+			disconnectAllTranslationSessions();
+			livekitClient?.disconnect();
+			livekitClient = undefined;
+			stopStream(micStream);
+			micStream = undefined;
 			return;
 		}
-
-		const joinResult = await joinResponse.json();
-		participantId = joinResult.participant.participantId;
-		targetLanguage = spokenLanguage;
-		localStorage.setItem(storageKey, participantId);
-
-		await connectLiveKit();
-		await waitForOtherParticipant();
 	}
 
 	async function connectLiveKit() {
@@ -239,6 +270,7 @@
 				incomingTranslationTrackId = track.id;
 				translatedAudioStream = new MediaStream([track]);
 				if (publication.isMuted) return;
+				markIncomingTranslation('streaming');
 				uiState = uiState === 'speaking' ? 'speaking' : 'receiving_translation';
 				detail = 'Receiving translated audio.';
 			},
@@ -252,6 +284,7 @@
 				resetLatency('remote_speech');
 				markLatency('livekit_remote_ptt_on');
 				clearIdleDisconnectTimer();
+				if (!paused && participantCount === 2) markIncomingTranslation('streaming');
 				if (
 					!paused &&
 					participantCount === 2 &&
@@ -282,30 +315,15 @@
 		startParticipantPolling();
 	}
 
-	async function waitForOtherParticipant() {
-		uiState = 'waiting_for_other_participant';
-		detail = 'Waiting for the other phone to connect.';
-
-		for (let attempt = 0; attempt < 90; attempt += 1) {
-			const roomResponse = await fetch(`/api/rooms/${roomId}`);
-			if (roomResponse.ok) {
-				const room = await roomResponse.json();
-				const otherParticipant = room.participants?.find(
-					(participant: { participantId: string; status: string; spokenLanguage: string }) =>
-						participant.participantId !== participantId && participant.status === 'active'
-				);
-
-				if (otherParticipant?.spokenLanguage) {
-					uiState = 'connected';
-					detail = `Ready to hear translations in ${getLanguageLabel(targetLanguage)}.`;
-					return;
-				}
-			}
-
-			await new Promise((resolvePoll) => setTimeout(resolvePoll, 1000));
+	function enterWaitingForOtherParticipant() {
+		if (participantCount > 1) {
+			uiState = 'connected';
+			detail = `Ready to hear translations in ${getLanguageLabel(targetLanguage)}.`;
+			return;
 		}
 
-		detail = 'Still waiting for another phone.';
+		uiState = 'waiting_for_other_participant';
+		detail = 'Waiting for the other phone to connect.';
 	}
 
 	async function connectDirectTranslation(
@@ -338,6 +356,7 @@
 			openAITranslationLanguage: getOpenAITranslationLanguage(targetLanguage),
 			sourceTrack,
 			onMetric: (name) => markLatency(name),
+			onOutputState: markIncomingTranslation,
 			onTranslatedAudio: (stream) => {
 				markLatency('translated_audio_stream_ready');
 				translatedAudioStream = stream;
@@ -397,6 +416,10 @@
 			openAITranslationLanguage: getOpenAITranslationLanguage(target),
 			sourceTrack,
 			onMetric: (name) => markLatency(name),
+			onOutputState: (state) => {
+				if (state === 'streaming') markLatency('openai_output_streaming');
+				if (state === 'complete') markLatency('openai_output_complete');
+			},
 			onTranslatedAudio: async (stream) => {
 				markLatency('translated_audio_stream_ready');
 				await livekitClient?.publishTranslationTrack(stream, {
@@ -437,6 +460,7 @@
 
 	function startSpeaking() {
 		if (pushDisabled) return;
+		incomingTranslationState = 'idle';
 		uiState = 'speaking';
 		detail = 'Speaking. Other languages will hear one shared translation.';
 		livekitClient?.setMicrophoneEnabled(true);
@@ -533,6 +557,7 @@
 		directTranslationClient = undefined;
 		directRemoteMicrophoneTrackId = '';
 		translationStatus = outgoingTranslationClients.size > 0 ? translationStatus : 'idle';
+		incomingTranslationState = 'idle';
 		translatedAudioStream = undefined;
 		if (remoteAudioElement) {
 			remoteAudioElement.pause();
@@ -550,6 +575,7 @@
 		outgoingTranslationClients.clear();
 		translationStatus = 'idle';
 		incomingTranslationTrackId = '';
+		incomingTranslationState = 'idle';
 		if (remoteAudioElement) {
 			remoteAudioElement.pause();
 			remoteAudioElement.srcObject = null;
@@ -579,9 +605,9 @@
 		}, 60_000);
 	}
 
-	async function connectOutgoingTranslationsForCurrentListeners() {
+	async function connectOutgoingTranslationsForCurrentListeners(refreshFirst = true) {
 		if (participantCount < 3) return;
-		await refreshParticipants(false);
+		if (refreshFirst) await refreshParticipants(false);
 		const [sourceTrack] = micStream?.getAudioTracks() ?? [];
 		if (!sourceTrack) return;
 
@@ -608,19 +634,32 @@
 	function startParticipantPolling() {
 		void refreshParticipants();
 		participantPollTimer ??= setInterval(() => {
+			if (
+				typeof document !== 'undefined' &&
+				document.visibilityState === 'hidden' &&
+				uiState !== 'speaking'
+			) {
+				return;
+			}
 			void refreshParticipants();
-		}, 3000);
+		}, 5000);
 	}
 
 	async function refreshParticipants(connectNewOutputs = true) {
-		const roomResponse = await fetch(`/api/rooms/${roomId}`).catch(() => null);
-		if (!roomResponse?.ok) return;
-		const room = await roomResponse.json();
-		activeParticipants = (room.participants ?? []).filter(
-			(participant: { status: string }) => participant.status === 'active'
-		);
-		if (connectNewOutputs && uiState === 'speaking') {
-			void connectOutgoingTranslationsForCurrentListeners();
+		if (participantRefreshInFlight) return;
+		participantRefreshInFlight = true;
+		try {
+			const roomResponse = await fetch(`/api/rooms/${roomId}`).catch(() => null);
+			if (!roomResponse?.ok) return;
+			const room = await roomResponse.json();
+			activeParticipants = (room.participants ?? []).filter(
+				(participant: { status: string }) => participant.status === 'active'
+			);
+			if (connectNewOutputs && uiState === 'speaking') {
+				void connectOutgoingTranslationsForCurrentListeners(false);
+			}
+		} finally {
+			participantRefreshInFlight = false;
 		}
 	}
 
@@ -649,6 +688,19 @@
 		}
 		translatedAudioEnergyMeter?.stop();
 		translatedAudioEnergyMeter = undefined;
+	}
+
+	function markIncomingTranslation(state: 'streaming' | 'complete' | 'interrupted') {
+		incomingTranslationState = state;
+		if (state === 'streaming') {
+			detail = 'Receiving translated audio.';
+			return;
+		}
+
+		detail =
+			state === 'complete'
+				? 'Translation complete. Hold to reply.'
+				: 'Translation stopped before completion.';
 	}
 
 	$effect(() => {
@@ -746,125 +798,156 @@
 </script>
 
 <svelte:head>
-	<title>Room {roomId} · LangLink</title>
+	<title>Room {roomId} · Lingk</title>
 </svelte:head>
 
-<DeviceFrame topLabel="ROOM {roomId.toUpperCase()}" {topLed}>
+<DeviceFrame
+	topLabel="ROOM {roomId.toUpperCase()}"
+	{topLed}
+	rxState={isInSetup ? undefined : rxState}
+>
 	{#snippet display()}
 		<DeviceScreen tone="green">
-			<div class="screen-stack">
-				<div class="top-row">
-					<RoomStatus
-						mic={micLevel}
-						participant={participantLevel}
-						translation={translationLevel}
-						{detail}
-					/>
-					{#if joinUrl}
+			{#if isInSetup && showInstructions}
+				<div class="instruction-gate" class:instruction-gate--exiting={instructionsExiting}>
+					<div class="instruction-panel" aria-hidden="true">
+						<picture>
+							<img
+								class="instruction-card"
+								src="/images/room-instructions.png"
+								width="923"
+								height="1704"
+								decoding="async"
+								fetchpriority="high"
+								alt=""
+							/>
+						</picture>
+					</div>
+					<p class="sr-only">
+						Ready to talk. Talk into your phone mic. Use one earbud for the best experience; both
+						earbuds also work. Hold push to talk while speaking. Release to listen.
+					</p>
+				</div>
+			{:else}
+				<div class="screen-stack" class:screen-stack--entering={isInSetup}>
+					<div class="top-row">
+						<RoomStatus
+							mic={micLevel}
+							participant={participantLevel}
+							translation={translationLevel}
+							{detail}
+						/>
+						{#if joinUrl}
+							<button
+								type="button"
+								class="qr-tile"
+								aria-label="Copy room join link"
+								onpointerdown={() => playClick('down')}
+								onclick={copyJoinLink}
+							>
+								<div class="qr-frame">
+									<QrCode value={joinUrl} dark="#0d0d0d" light="#e8c890" />
+								</div>
+								<span class="qr-label mono">{qrCopied ? 'COPIED ✓' : 'TAP TO COPY'}</span>
+							</button>
+						{/if}
+					</div>
+
+					{#if isInSetup}
+						{#if !isHost}
+							<LanguagePicker bind:value={spokenLanguage} label="Language you hear" />
+						{:else}
+							<p class="host-lang mono crt-fringe">
+								<span class="dim">YOU HEAR</span>
+								<span class="value">{getLanguageLabel(spokenLanguage)}</span>
+							</p>
+						{/if}
+						<p class="lang-hint mono crt-fringe">YOU CAN SPEAK ANY LANGUAGE — WE TRANSLATE</p>
 						<button
+							class="crt-fringe start"
 							type="button"
-							class="qr-tile"
-							aria-label="Copy room join link"
 							onpointerdown={() => playClick('down')}
-							onclick={copyJoinLink}
+							onclick={join}
 						>
-							<div class="qr-frame">
-								<QrCode value={joinUrl} dark="#0d0d0d" light="#e8c890" />
+							{uiState === 'error' ? '↻ TRY AGAIN' : '▶ START ON THIS PHONE'}
+						</button>
+					{:else}
+						<dl class="meta-grid crt-fringe">
+							<div>
+								<dt>HEARING</dt>
+								<dd>{getLanguageLabel(targetLanguage || spokenLanguage)}</dd>
 							</div>
-							<span class="qr-label mono">{qrCopied ? 'COPIED ✓' : 'TAP TO COPY'}</span>
+							<div>
+								<dt>PEERS</dt>
+								<dd>{participantCount}</dd>
+							</div>
+						</dl>
+						<div class="viz-area">
+							<AudioVisualizer stream={vizStream} color={vizColor} />
+							<span class="viz-label mono crt-fringe">
+								{#if uiState === 'speaking'}
+									▶ TX · YOU
+								{:else if incomingTranslationState === 'complete'}
+									✓ RX · COMPLETE
+								{:else if incomingTranslationState === 'interrupted'}
+									× RX · INTERRUPTED
+								{:else if translatedAudioStream && !muted}
+									◀ RX · TRANSLATING
+								{:else}
+									— STANDBY
+								{/if}
+							</span>
+						</div>
+					{/if}
+
+					{#if error}
+						<p class="error crt-fringe">⚠ {error}</p>
+					{/if}
+
+					{#if uiState === 'reconnecting'}
+						<button
+							class="reconnect crt-fringe"
+							type="button"
+							onpointerdown={() => playClick('down')}
+							onclick={reconnectTranslation}
+						>
+							↻ RECONNECT TRANSLATION
 						</button>
 					{/if}
 				</div>
-
-				{#if isInSetup}
-					<img
-						class="instruction-card"
-						src="/images/room-instructions.png"
-						alt="Ready to talk. Talk into your phone mic. Use one earbud for the best experience; both earbuds also work. Hold push to talk while speaking. Release to listen."
-					/>
-					{#if !isHost}
-						<label class="lang">
-							<span class="lang-label crt-fringe">LANGUAGE YOU HEAR</span>
-							<select bind:value={spokenLanguage}>
-								{#each languages as language (language.code)}
-									<option value={language.code}>{language.label}</option>
-								{/each}
-							</select>
-						</label>
-					{:else}
-						<p class="host-lang mono crt-fringe">
-							<span class="dim">YOU HEAR</span>
-							<span class="value">{getLanguageLabel(spokenLanguage)}</span>
-						</p>
-					{/if}
-					<p class="lang-hint mono crt-fringe">YOU CAN SPEAK ANY LANGUAGE — WE TRANSLATE</p>
-					<button
-						class="crt-fringe start"
-						type="button"
-						onpointerdown={() => playClick('down')}
-						onclick={join}
-					>
-						{uiState === 'error' ? '↻ TRY AGAIN' : '▶ START ON THIS PHONE'}
-					</button>
-				{:else}
-					<dl class="meta-grid crt-fringe">
-						<div>
-							<dt>HEARING</dt>
-							<dd>{getLanguageLabel(targetLanguage || spokenLanguage)}</dd>
-						</div>
-						<div>
-							<dt>PEERS</dt>
-							<dd>{participantCount}</dd>
-						</div>
-					</dl>
-					<div class="viz-area">
-						<AudioVisualizer stream={vizStream} color={vizColor} />
-						<span class="viz-label mono crt-fringe">
-							{#if uiState === 'speaking'}
-								▶ TX · YOU
-							{:else if translatedAudioStream && !muted}
-								◀ RX · TRANSLATION
-							{:else}
-								— STANDBY
-							{/if}
-						</span>
-					</div>
-				{/if}
-
-				{#if error}
-					<p class="error crt-fringe">⚠ {error}</p>
-				{/if}
-
-				{#if uiState === 'reconnecting'}
-					<button
-						class="reconnect crt-fringe"
-						type="button"
-						onpointerdown={() => playClick('down')}
-						onclick={reconnectTranslation}
-					>
-						↻ RECONNECT TRANSLATION
-					</button>
-				{/if}
-			</div>
+			{/if}
 		</DeviceScreen>
 	{/snippet}
 
 	{#snippet front()}
-		<RoomControls
-			{muted}
-			{paused}
-			onmute={toggleMute}
-			onpause={togglePause}
-			onmicdevice={openMicDevices}
-			onaudiodevice={openAudioDevices}
-			onleave={leave}
-		/>
-		<PushToTalkButton
-			disabled={pushDisabled}
-			active={uiState === 'speaking'}
-			onstart={startSpeaking}
-			onstop={stopSpeaking}
-		/>
+		{#if isInSetup && showInstructions}
+			<div class="continue-row" class:continue-row--exiting={instructionsExiting}>
+				<DeviceButton
+					tone="orange"
+					size="lg"
+					disabled={instructionsExiting}
+					onclick={continueFromInstructions}
+				>
+					<span>CONTINUE</span>
+				</DeviceButton>
+			</div>
+		{:else if !isInSetup}
+			<RoomControls
+				{muted}
+				{paused}
+				onmute={toggleMute}
+				onpause={togglePause}
+				onmicdevice={openMicDevices}
+				onaudiodevice={openAudioDevices}
+				onleave={leave}
+			/>
+			<PushToTalkButton
+				disabled={pushDisabled}
+				active={uiState === 'speaking'}
+				onstart={startSpeaking}
+				onstop={stopSpeaking}
+			/>
+		{/if}
 	{/snippet}
 </DeviceFrame>
 
@@ -887,6 +970,110 @@
 		overflow-y: auto;
 		scrollbar-width: thin;
 		scrollbar-color: oklch(0.36 0.1 145 / 0.5) transparent;
+	}
+
+	.screen-stack--entering {
+		animation: crt-boot-in 520ms steps(8, end) both;
+	}
+
+	:global(.screen[data-tone='green'] .content:has(.instruction-gate)) {
+		padding: 0;
+	}
+
+	.instruction-gate {
+		position: relative;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.instruction-panel {
+		position: relative;
+		min-height: 0;
+		border-radius: 0.25rem;
+		background: oklch(0.045 0.015 145);
+		overflow: hidden;
+	}
+
+	.instruction-panel picture {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+
+	.instruction-panel::before,
+	.instruction-panel::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		pointer-events: none;
+		background-image: url('/images/room-instructions.png');
+		background-position: center top;
+		background-size: cover;
+		background-repeat: no-repeat;
+		mix-blend-mode: screen;
+	}
+
+	.instruction-panel::before {
+		opacity: 0.22;
+		filter: hue-rotate(135deg) saturate(2.1) contrast(1.15);
+		transform: translateX(-1.8px);
+	}
+
+	.instruction-panel::after {
+		opacity: 0.18;
+		filter: hue-rotate(260deg) saturate(2) contrast(1.12);
+		transform: translateX(2px);
+	}
+
+	.instruction-card {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center top;
+	}
+
+	.instruction-gate--exiting .instruction-card {
+		animation: crt-glitch-main 720ms steps(1, end) both;
+	}
+
+	.instruction-gate--exiting .instruction-panel {
+		animation: crt-panel-collapse 720ms steps(1, end) both;
+	}
+
+	.instruction-gate--exiting .instruction-panel::before {
+		animation: crt-glitch-red 720ms steps(1, end) both;
+	}
+
+	.instruction-gate--exiting .instruction-panel::after {
+		animation: crt-glitch-blue 720ms steps(1, end) both;
+	}
+
+	.continue-row {
+		display: block;
+		width: 100%;
+	}
+
+	.continue-row--exiting {
+		pointer-events: none;
+		animation: crt-button-out 720ms steps(1, end) both;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.viz-area {
@@ -971,33 +1158,6 @@
 		white-space: nowrap;
 	}
 
-	.lang {
-		display: grid;
-		gap: 0.4rem;
-	}
-
-	.instruction-card {
-		display: block;
-		width: 100%;
-		height: auto;
-		flex: 0 0 auto;
-		border: 1px solid oklch(0.45 0.12 145 / 0.32);
-		border-radius: 0.45rem;
-		background: oklch(0.06 0.01 145);
-		box-shadow:
-			inset 0 0 0 1px oklch(0 0 0 / 0.55),
-			0 0 18px oklch(0.45 0.14 145 / 0.16);
-		overflow: hidden;
-	}
-
-	.lang-label {
-		font-size: 0.62rem;
-		font-weight: 700;
-		letter-spacing: 0.2em;
-		color: var(--screen-green-dim);
-		text-transform: uppercase;
-	}
-
 	.host-lang {
 		display: flex;
 		align-items: baseline;
@@ -1032,34 +1192,6 @@
 		text-transform: uppercase;
 		text-align: center;
 		opacity: 0.75;
-	}
-
-	.lang select {
-		appearance: none;
-		width: 100%;
-		padding: 0.7rem 0.9rem;
-		border: 1px solid oklch(0.45 0.12 145 / 0.4);
-		border-radius: 0.4rem;
-		background: oklch(0.1 0.02 145);
-		color: var(--screen-green);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.9rem;
-		font-weight: 500;
-		background-image:
-			linear-gradient(45deg, transparent 50%, var(--screen-green) 50%),
-			linear-gradient(135deg, var(--screen-green) 50%, transparent 50%);
-		background-position:
-			calc(100% - 1.1rem) 50%,
-			calc(100% - 0.7rem) 50%;
-		background-size:
-			0.4rem 0.4rem,
-			0.4rem 0.4rem;
-		background-repeat: no-repeat;
-	}
-
-	.lang select option {
-		color: oklch(0.92 0 0);
-		background: oklch(0.12 0.005 250);
 	}
 
 	.start,
@@ -1128,5 +1260,183 @@
 		width: 1px;
 		height: 1px;
 		overflow: hidden;
+	}
+
+	@keyframes crt-glitch-main {
+		0% {
+			transform: translate(0);
+			filter: brightness(1) contrast(1);
+			clip-path: inset(0);
+			opacity: 1;
+		}
+		10% {
+			transform: translate(-3px, 0);
+			filter: brightness(1.7) contrast(1.35) saturate(1.5);
+			clip-path: inset(0 0 72% 0);
+		}
+		18% {
+			transform: translate(4px, -1px);
+			clip-path: inset(31% 0 48% 0);
+		}
+		28% {
+			transform: translate(-7px, 1px);
+			filter: brightness(0.8) contrast(1.9);
+			clip-path: inset(58% 0 22% 0);
+		}
+		40% {
+			transform: translate(2px, 0) skewX(2deg);
+			clip-path: inset(6% 0 8% 0);
+		}
+		55% {
+			transform: scaleY(0.72) translateY(12%);
+			filter: brightness(2.1) contrast(2.2);
+			clip-path: inset(38% 0 39% 0);
+		}
+		68% {
+			transform: scaleY(0.08) translateY(480%);
+			opacity: 0.9;
+			clip-path: inset(44% 0 48% 0);
+		}
+		78% {
+			opacity: 0;
+		}
+		100% {
+			opacity: 0;
+		}
+	}
+
+	@keyframes crt-glitch-red {
+		0%,
+		8%,
+		80%,
+		100% {
+			opacity: 0;
+		}
+		12% {
+			opacity: 0.55;
+			transform: translate(7px, -1px);
+			clip-path: inset(8% 0 78% 0);
+		}
+		30% {
+			opacity: 0.5;
+			transform: translate(-10px, 1px);
+			clip-path: inset(46% 0 34% 0);
+		}
+		58% {
+			opacity: 0.7;
+			transform: translate(13px, 0);
+			clip-path: inset(70% 0 10% 0);
+		}
+	}
+
+	@keyframes crt-glitch-blue {
+		0%,
+		10%,
+		82%,
+		100% {
+			opacity: 0;
+		}
+		16% {
+			opacity: 0.45;
+			transform: translate(-8px, 1px);
+			clip-path: inset(21% 0 62% 0);
+		}
+		36% {
+			opacity: 0.45;
+			transform: translate(11px, -1px);
+			clip-path: inset(52% 0 28% 0);
+		}
+		62% {
+			opacity: 0.7;
+			transform: translate(-14px, 0);
+			clip-path: inset(35% 0 50% 0);
+		}
+	}
+
+	@keyframes crt-panel-collapse {
+		0%,
+		62% {
+			filter: none;
+			background-color: transparent;
+		}
+		70% {
+			filter: brightness(2.4);
+			background-color: oklch(0.58 0.15 145 / 0.18);
+		}
+		78% {
+			filter: brightness(0);
+			background-color: oklch(0 0 0);
+			box-shadow:
+				inset 0 0 0 1px oklch(0 0 0 / 0.85),
+				inset 0 0 32px oklch(0 0 0),
+				0 0 2px oklch(0.45 0.14 145 / 0);
+		}
+		100% {
+			filter: brightness(0);
+			background-color: oklch(0 0 0);
+		}
+	}
+
+	@keyframes crt-button-out {
+		0%,
+		45% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+		52% {
+			opacity: 0.7;
+			transform: translateY(1px);
+			clip-path: inset(0 0 55% 0);
+		}
+		68%,
+		100% {
+			opacity: 0;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes crt-boot-in {
+		0% {
+			opacity: 0;
+			filter: brightness(0);
+			transform: scaleY(0.04);
+		}
+		18% {
+			opacity: 1;
+			filter: brightness(2.2);
+			transform: scaleY(0.08);
+		}
+		32% {
+			filter: brightness(0.35);
+			transform: scaleY(0.02);
+		}
+		46% {
+			filter: brightness(1.6);
+			transform: scaleY(1.04);
+		}
+		62% {
+			filter: brightness(0.78);
+			transform: translateX(-2px);
+		}
+		74% {
+			filter: brightness(1.2);
+			transform: translateX(2px);
+		}
+		100% {
+			opacity: 1;
+			filter: none;
+			transform: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.screen-stack--entering,
+		.instruction-gate--exiting .instruction-card,
+		.instruction-gate--exiting .instruction-panel,
+		.instruction-gate--exiting .instruction-panel::before,
+		.instruction-gate--exiting .instruction-panel::after,
+		.continue-row--exiting {
+			animation-duration: 1ms;
+		}
 	}
 </style>

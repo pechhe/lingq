@@ -70,7 +70,7 @@ export class LiveKitRoomClient {
 		if (this.#publishedMicrophoneTrack?.id === track.id) return;
 
 		if (this.#publishedMicrophoneTrack) {
-			this.#room.localParticipant.unpublishTrack(this.#publishedMicrophoneTrack);
+			void this.#room.localParticipant.unpublishTrack(this.#publishedMicrophoneTrack);
 		}
 
 		track.enabled = false;
@@ -109,21 +109,21 @@ export class LiveKitRoomClient {
 		const track = this.#publishedTranslationTracks.get(targetLanguage);
 		if (!track) return;
 
-		this.#room.localParticipant.unpublishTrack(track);
+		void this.#room.localParticipant.unpublishTrack(track);
 		this.#publishedTranslationTracks.delete(targetLanguage);
 	}
 
 	disconnect() {
 		if (this.#publishedMicrophoneTrack) {
-			this.#room.localParticipant.unpublishTrack(this.#publishedMicrophoneTrack);
+			void this.#room.localParticipant.unpublishTrack(this.#publishedMicrophoneTrack);
 			this.#publishedMicrophoneTrack = undefined;
 			this.#publishedMicrophone = undefined;
 		}
 		for (const track of this.#publishedTranslationTracks.values()) {
-			this.#room.localParticipant.unpublishTrack(track);
+			void this.#room.localParticipant.unpublishTrack(track);
 		}
 		this.#publishedTranslationTracks.clear();
-		this.#room.disconnect();
+		void this.#room.disconnect();
 	}
 
 	#wireEvents() {

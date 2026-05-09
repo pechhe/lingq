@@ -15,6 +15,10 @@ function createParticipantId() {
 	return crypto.randomUUID();
 }
 
+function normaliseRoomId(roomId: string) {
+	return roomId.trim().toUpperCase();
+}
+
 export const create = mutation({
 	args: {
 		spokenLanguage: v.string(),
@@ -66,16 +70,17 @@ export const get = query({
 		roomId: v.string()
 	},
 	handler: async (ctx, args) => {
+		const roomId = normaliseRoomId(args.roomId);
 		const room = await ctx.db
 			.query('rooms')
-			.withIndex('by_roomId', (q) => q.eq('roomId', args.roomId))
+			.withIndex('by_roomId', (q) => q.eq('roomId', roomId))
 			.unique();
 
 		if (!room) return null;
 
 		const participants = await ctx.db
 			.query('participants')
-			.withIndex('by_roomId', (q) => q.eq('roomId', args.roomId))
+			.withIndex('by_roomId_and_status', (q) => q.eq('roomId', roomId).eq('status', 'active'))
 			.take(50);
 
 		return { room, participants };
@@ -91,9 +96,10 @@ export const join = mutation({
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now();
+		const roomId = normaliseRoomId(args.roomId);
 		const room = await ctx.db
 			.query('rooms')
-			.withIndex('by_roomId', (q) => q.eq('roomId', args.roomId))
+			.withIndex('by_roomId', (q) => q.eq('roomId', roomId))
 			.unique();
 
 		if (!room || room.status === 'ended') {
@@ -104,7 +110,7 @@ export const join = mutation({
 			const existingParticipant = await ctx.db
 				.query('participants')
 				.withIndex('by_roomId_and_participantId', (q) =>
-					q.eq('roomId', args.roomId).eq('participantId', args.participantId as string)
+					q.eq('roomId', roomId).eq('participantId', args.participantId as string)
 				)
 				.unique();
 
@@ -126,19 +132,17 @@ export const join = mutation({
 			}
 		}
 
-		const activeParticipants = (
-			await ctx.db
-				.query('participants')
-				.withIndex('by_roomId', (q) => q.eq('roomId', args.roomId))
-				.take(50)
-		).filter((participant) => participant.status === 'active');
+		const activeParticipants = await ctx.db
+			.query('participants')
+			.withIndex('by_roomId_and_status', (q) => q.eq('roomId', roomId).eq('status', 'active'))
+			.take(room.maxParticipants);
 
 		if (activeParticipants.length >= room.maxParticipants) {
 			throw new Error('Room is full');
 		}
 
 		const participant = {
-			roomId: args.roomId,
+			roomId,
 			participantId: createParticipantId(),
 			side: `P${activeParticipants.length + 1}`,
 			spokenLanguage: args.spokenLanguage,
@@ -173,10 +177,11 @@ export const updateParticipantLanguages = mutation({
 		hearLanguage: v.string()
 	},
 	handler: async (ctx, args) => {
+		const roomId = normaliseRoomId(args.roomId);
 		const participant = await ctx.db
 			.query('participants')
 			.withIndex('by_roomId_and_participantId', (q) =>
-				q.eq('roomId', args.roomId).eq('participantId', args.participantId)
+				q.eq('roomId', roomId).eq('participantId', args.participantId)
 			)
 			.unique();
 
@@ -200,10 +205,11 @@ export const leave = mutation({
 		participantId: v.string()
 	},
 	handler: async (ctx, args) => {
+		const roomId = normaliseRoomId(args.roomId);
 		const participant = await ctx.db
 			.query('participants')
 			.withIndex('by_roomId_and_participantId', (q) =>
-				q.eq('roomId', args.roomId).eq('participantId', args.participantId)
+				q.eq('roomId', roomId).eq('participantId', args.participantId)
 			)
 			.unique();
 
@@ -216,7 +222,7 @@ export const leave = mutation({
 
 		const room = await ctx.db
 			.query('rooms')
-			.withIndex('by_roomId', (q) => q.eq('roomId', args.roomId))
+			.withIndex('by_roomId', (q) => q.eq('roomId', roomId))
 			.unique();
 
 		if (room) {
@@ -242,10 +248,11 @@ export const recordLatencyEvents = mutation({
 		userAgent: v.optional(v.string())
 	},
 	handler: async (ctx, args) => {
+		const roomId = normaliseRoomId(args.roomId);
 		const participant = await ctx.db
 			.query('participants')
 			.withIndex('by_roomId_and_participantId', (q) =>
-				q.eq('roomId', args.roomId).eq('participantId', args.participantId)
+				q.eq('roomId', roomId).eq('participantId', args.participantId)
 			)
 			.unique();
 
@@ -256,7 +263,7 @@ export const recordLatencyEvents = mutation({
 		const events = args.events.slice(0, 40);
 		for (const event of events) {
 			await ctx.db.insert('latencyEvents', {
-				roomId: args.roomId,
+				roomId,
 				participantId: args.participantId,
 				traceId: args.traceId,
 				name: event.name,

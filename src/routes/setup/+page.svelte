@@ -5,8 +5,9 @@
 	import DeviceButton from '$lib/components/DeviceButton.svelte';
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
+	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
 	import QrCode from '$lib/components/QrCode.svelte';
-	import { defaultHearLanguage, languages } from '$lib/constants/languages';
+	import { defaultHearLanguage } from '$lib/constants/languages';
 	import { playClick, unlockClickAudio } from '$lib/realtime/clickSound';
 
 	let spokenLanguage = $state(defaultHearLanguage('en'));
@@ -26,7 +27,7 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				spokenLanguage,
-				hasOpenAIKey: Boolean(localStorage.getItem('langlink:openai-api-key')),
+				hasOpenAIKey: Boolean(localStorage.getItem('lingk:openai-api-key')),
 				accessMode:
 					page.url.searchParams.get('access') === 'trial'
 						? 'trial'
@@ -46,7 +47,7 @@
 		createdRoom = await response.json();
 		if (createdRoom) {
 			try {
-				localStorage.setItem(`langlink:${createdRoom.roomId}:host-lang`, spokenLanguage);
+				localStorage.setItem(`lingk:${createdRoom.roomId}:host-lang`, spokenLanguage);
 			} catch {
 				// localStorage blocked; host will see the language picker on the room page as a fallback
 			}
@@ -56,6 +57,10 @@
 	function joinCreatedRoom() {
 		if (!createdRoom) return;
 		goto(resolve(`/room/${createdRoom.roomId}`));
+	}
+
+	function startOnePhoneMode() {
+		goto(resolve('/one-phone'));
 	}
 
 	function setBrowserLanguage() {
@@ -75,7 +80,7 @@
 </script>
 
 <svelte:head>
-	<title>LangLink</title>
+	<title>Lingk</title>
 	<meta
 		name="description"
 		content="Create a two-person mobile room for push-to-talk spoken translation."
@@ -84,7 +89,7 @@
 
 <svelte:window onload={setBrowserLanguage} />
 
-<DeviceFrame topLed={createdRoom ? 'ready' : 'idle'} topLabel="LANGLINK · STANDBY">
+<DeviceFrame topLed={createdRoom ? 'ready' : 'idle'} topLabel="LINGK · STANDBY">
 	{#snippet display()}
 		<div class="earpiece" aria-hidden="true">
 			<span class="earpiece-bar"></span>
@@ -101,14 +106,7 @@
 						<p class="kicker">LIVE TWO-PHONE TRANSLATION</p>
 						<h1>Hold to speak.<br />They hear you<br />in their language.</h1>
 					</div>
-					<label class="lang">
-						<span class="lang-label crt-fringe">YOUR LANGUAGE</span>
-						<select bind:value={spokenLanguage}>
-							{#each languages as language (language.code)}
-								<option value={language.code}>{language.label}</option>
-							{/each}
-						</select>
-					</label>
+					<LanguagePicker bind:value={spokenLanguage} label="Your language" tone="amber" />
 					{#if error}
 						<p class="error crt-fringe">⚠ {error}</p>
 					{/if}
@@ -142,9 +140,14 @@
 
 	{#snippet front()}
 		{#if !createdRoom}
-			<DeviceButton tone="orange" size="lg" disabled={pending} onclick={createRoom}>
-				<span>{pending ? 'CREATING…' : 'CREATE ROOM'}</span>
-			</DeviceButton>
+			<div class="setup-actions">
+				<DeviceButton tone="orange" size="lg" disabled={pending} onclick={createRoom}>
+					<span>{pending ? 'CREATING…' : 'CREATE ROOM'}</span>
+				</DeviceButton>
+				<DeviceButton disabled={pending} onclick={startOnePhoneMode}>
+					<span>ONE PHONE</span>
+				</DeviceButton>
+			</div>
 		{:else}
 			<div class="primary-row">
 				<DeviceButton tone="orange" size="lg" onclick={joinCreatedRoom}>
@@ -226,49 +229,6 @@
 		letter-spacing: 0;
 	}
 
-	.lang {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.lang-label {
-		font-size: 0.62rem;
-		font-weight: 700;
-		letter-spacing: 0.2em;
-		color: var(--screen-amber-dim);
-		text-transform: uppercase;
-	}
-
-	.lang select {
-		appearance: none;
-		width: 100%;
-		padding: 0.85rem 0.9rem;
-		border: 1px solid oklch(0.45 0.1 70 / 0.45);
-		border-radius: 0.4rem;
-		background: oklch(0.12 0.02 60);
-		color: var(--screen-amber);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.95rem;
-		font-weight: 500;
-		letter-spacing: 0.04em;
-		background-image:
-			linear-gradient(45deg, transparent 50%, var(--screen-amber) 50%),
-			linear-gradient(135deg, var(--screen-amber) 50%, transparent 50%);
-		background-position:
-			calc(100% - 1.1rem) 50%,
-			calc(100% - 0.7rem) 50%;
-		background-size:
-			0.4rem 0.4rem,
-			0.4rem 0.4rem;
-		background-repeat: no-repeat;
-	}
-
-	.lang select option {
-		color: oklch(0.92 0 0);
-		background: oklch(0.12 0.005 250);
-	}
-
 	.error {
 		margin: 0;
 		color: oklch(0.78 0.18 28);
@@ -335,6 +295,12 @@
 	}
 
 	.primary-row {
+		display: grid;
+		grid-template-columns: 2fr 1fr;
+		gap: 0.5rem;
+	}
+
+	.setup-actions {
 		display: grid;
 		grid-template-columns: 2fr 1fr;
 		gap: 0.5rem;

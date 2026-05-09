@@ -1,5 +1,5 @@
 <script lang="ts">
-	type Color = 'green' | 'purple';
+	type Color = 'green' | 'purple' | 'orange' | 'blue';
 
 	type Palette = {
 		trace: string;
@@ -35,6 +35,28 @@
 			gridStrong: 'rgba(205, 140, 255, 0.13)',
 			r: 'rgba(255, 70, 130, 0.5)',
 			b: 'rgba(120, 90, 255, 0.55)'
+		},
+		orange: {
+			trace: 'rgb(255, 170, 60)',
+			glow: 'rgba(255, 170, 60, 0.56)',
+			halo: 'rgba(255, 135, 35, 0.24)',
+			core: 'rgba(255, 236, 198, 0.95)',
+			baseline: 'rgba(255, 170, 60, 0.16)',
+			grid: 'rgba(255, 170, 60, 0.07)',
+			gridStrong: 'rgba(255, 170, 60, 0.13)',
+			r: 'rgba(255, 80, 45, 0.52)',
+			b: 'rgba(255, 210, 90, 0.48)'
+		},
+		blue: {
+			trace: 'rgb(120, 175, 255)',
+			glow: 'rgba(120, 175, 255, 0.55)',
+			halo: 'rgba(120, 175, 255, 0.22)',
+			core: 'rgba(220, 238, 255, 0.95)',
+			baseline: 'rgba(120, 175, 255, 0.16)',
+			grid: 'rgba(120, 175, 255, 0.07)',
+			gridStrong: 'rgba(120, 175, 255, 0.13)',
+			r: 'rgba(80, 150, 255, 0.48)',
+			b: 'rgba(80, 95, 255, 0.55)'
 		}
 	};
 
@@ -57,6 +79,7 @@
 	let resizeObserver: ResizeObserver | undefined;
 	let canvasContext: CanvasRenderingContext2D | null = null;
 	let phaseOffset = 0;
+	let lastDrawAt = 0;
 
 	function ensureAudioContext() {
 		if (audioContext) return audioContext;
@@ -224,11 +247,20 @@
 		ctx.shadowBlur = 0;
 	}
 
-	function tick() {
+	function tick(now: number) {
 		if (!canvas || !canvasContext || !wrapper) {
 			rafId = requestAnimationFrame(tick);
 			return;
 		}
+
+		const isLive = Boolean(analyser && timeBuffer && sourceNode);
+		const minFrameMs = isLive ? 16 : 50;
+		if (now - lastDrawAt < minFrameMs) {
+			rafId = requestAnimationFrame(tick);
+			return;
+		}
+		lastDrawAt = now;
+
 		const rect = wrapper.getBoundingClientRect();
 		const w = rect.width;
 		const h = rect.height;
@@ -242,7 +274,7 @@
 		drawGrid(w, h, palette);
 		drawBaseline(w, h, palette);
 
-		if (analyser && timeBuffer && sourceNode) {
+		if (isLive && analyser && timeBuffer && sourceNode) {
 			analyser.getByteTimeDomainData(timeBuffer);
 			const data = timeBuffer;
 			drawCRTWaveform((offsetX) => tracePath(data, w, h, offsetX), palette, true);

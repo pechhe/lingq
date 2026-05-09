@@ -3,7 +3,7 @@ import type { Cookies } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { getAuthenticatedConvexClient, getConvexClient } from './convex';
 
-const accountCookieName = 'langlink_account';
+const accountCookieName = 'lingk_account';
 
 export function getAccountId(cookies: Cookies) {
 	return cookies.get(accountCookieName);

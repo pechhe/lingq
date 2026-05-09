@@ -4,8 +4,9 @@ import { getAccountId, getEntitlement } from '$lib/server/access';
 import { endUsageSession, startUsageSession } from '$lib/server/billing';
 import { createRealtimeClientSecret } from '$lib/server/openai';
 import { assertParticipant } from '$lib/server/roomAuth';
+import type { RequestHandler } from './$types';
 
-export async function POST({ cookies, request }) {
+export const POST: RequestHandler = async ({ cookies, request }) => {
 	const body = await request.json().catch(() => null);
 
 	if (!body?.roomId || !body?.participantId || !isSupportedLanguage(body.targetLanguage)) {
@@ -22,7 +23,7 @@ export async function POST({ cookies, request }) {
 		error(402, 'OpenAI API key is required for this room');
 	}
 
-	if (!openaiApiKey) {
+	if (!openaiApiKey && room.accessMode !== 'test') {
 		const accountId = room.accountId ?? getAccountId(cookies);
 		if (!accountId) {
 			error(402, 'Subscription account is required');
@@ -68,4 +69,4 @@ export async function POST({ cookies, request }) {
 		await endUsageSession({ sessionId, source: 'openai_token_failed' }).catch(() => null);
 		error(502, cause instanceof Error ? cause.message : 'Could not create Realtime token');
 	}
-}
+};

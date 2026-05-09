@@ -1,4 +1,5 @@
 import { AccessToken } from 'livekit-server-sdk';
+import { normaliseRoomId } from '$lib/roomIds';
 import { getLiveKitEnv } from './env';
 
 export async function createLiveKitToken(input: { roomId: string; participantId: string }) {
@@ -9,7 +10,7 @@ export async function createLiveKitToken(input: { roomId: string; participantId:
 	});
 
 	token.addGrant({
-		room: input.roomId,
+		room: normaliseRoomId(input.roomId),
 		roomJoin: true,
 		canPublish: true,
 		canPublishData: true,

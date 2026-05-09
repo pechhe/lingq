@@ -1,7 +1,8 @@
 import { error, json } from '@sveltejs/kit';
 import { endUsageSession } from '$lib/server/billing';
+import type { RequestHandler } from './$types';
 
-export async function POST({ request }) {
+export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json().catch(() => null);
 
 	if (typeof body?.usageSessionId !== 'string') {
@@ -14,4 +15,4 @@ export async function POST({ request }) {
 			source: 'browser_openai_disconnect'
 		})
 	);
-}
+};

@@ -2,7 +2,7 @@
 	import { playClick } from '$lib/realtime/clickSound';
 	import { X } from 'lucide-svelte';
 
-	const STORAGE_KEY = 'langlink:audio-output';
+	const STORAGE_KEY = 'lingk:audio-output';
 
 	type SinkAudioElement = HTMLAudioElement & {
 		setSinkId?: (sinkId: string) => Promise<void>;

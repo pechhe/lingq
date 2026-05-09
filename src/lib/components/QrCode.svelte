@@ -1,6 +1,4 @@
 <script lang="ts">
-	import QRCode from 'qrcode';
-
 	let {
 		value,
 		dark = '#0d0d0d',
@@ -10,13 +8,22 @@
 
 	$effect(() => {
 		let cancelled = false;
-		QRCode.toDataURL(value, {
-			margin: 1,
-			width: 240,
-			color: { dark, light }
-		}).then((nextDataUrl) => {
-			if (!cancelled) dataUrl = nextDataUrl;
-		});
+		dataUrl = '';
+
+		import('qrcode')
+			.then(({ default: QRCode }) =>
+				QRCode.toDataURL(value, {
+					margin: 1,
+					width: 240,
+					color: { dark, light }
+				})
+			)
+			.then((nextDataUrl) => {
+				if (!cancelled) dataUrl = nextDataUrl;
+			})
+			.catch(() => {
+				if (!cancelled) dataUrl = '';
+			});
 
 		return () => {
 			cancelled = true;

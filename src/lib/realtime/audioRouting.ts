@@ -1,4 +1,4 @@
-const MIC_STORAGE_KEY = 'langlink:mic-input';
+const MIC_STORAGE_KEY = 'lingk:mic-input';
 
 const EXTERNAL_MIC_PATTERN =
 	/airpods|bluetooth|headphone|headset|earbuds|speakerphone|hands[- ]?free|carplay|external/i;

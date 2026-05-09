@@ -1,7 +1,8 @@
 import { error, json } from '@sveltejs/kit';
 import { recordLatencyEvents } from '$lib/server/rooms';
+import type { RequestHandler } from './$types';
 
-export async function POST({ params, request }) {
+export const POST: RequestHandler = async ({ params, request }) => {
 	const body = await request.json().catch(() => null);
 
 	if (
@@ -42,4 +43,4 @@ export async function POST({ params, request }) {
 	} catch (cause) {
 		error(403, cause instanceof Error ? cause.message : 'Could not record latency events');
 	}
-}
+};

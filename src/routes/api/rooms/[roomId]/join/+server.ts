@@ -1,8 +1,9 @@
 import { error, json } from '@sveltejs/kit';
 import { isSupportedLanguage } from '$lib/constants/languages';
 import { joinRoom } from '$lib/server/rooms';
+import type { RequestHandler } from './$types';
 
-export async function POST({ params, request }) {
+export const POST: RequestHandler = async ({ params, request }) => {
 	const body = await request.json().catch(() => null);
 
 	if (!body || !params.roomId || !isSupportedLanguage(body.spokenLanguage)) {
@@ -21,4 +22,4 @@ export async function POST({ params, request }) {
 	} catch (cause) {
 		error(409, cause instanceof Error ? cause.message : 'Could not join room');
 	}
-}
+};

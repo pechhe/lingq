@@ -2,8 +2,9 @@ import { error, json } from '@sveltejs/kit';
 import { getAccountId, getEntitlement } from '$lib/server/access';
 import { createLiveKitToken } from '$lib/server/livekit';
 import { assertParticipant } from '$lib/server/roomAuth';
+import type { RequestHandler } from './$types';
 
-export async function POST({ cookies, request }) {
+export const POST: RequestHandler = async ({ cookies, request }) => {
 	const body = await request.json().catch(() => null);
 
 	if (!body?.roomId || !body?.participantId) {
@@ -36,4 +37,4 @@ export async function POST({ cookies, request }) {
 	}
 
 	return json(await createLiveKitToken({ roomId: body.roomId, participantId: body.participantId }));
-}
+};

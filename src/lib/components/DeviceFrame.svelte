@@ -2,17 +2,22 @@
 	import type { Snippet } from 'svelte';
 
 	type LedTone = 'idle' | 'ready' | 'speaking' | 'error';
+	type RxState = 'idle' | 'receiving' | 'done';
 
 	let {
 		display,
 		front,
+		surfaceTop,
 		footer,
+		rxState,
 		topLed = 'idle',
-		topLabel = 'LANGLINK'
+		topLabel = 'LINGK'
 	}: {
 		display: Snippet;
 		front: Snippet;
+		surfaceTop?: Snippet;
 		footer?: Snippet;
+		rxState?: RxState;
 		topLed?: LedTone;
 		topLabel?: string;
 	} = $props();
@@ -33,16 +38,36 @@
 			<span class="screw" aria-hidden="true"></span>
 		</header>
 
+		{#if surfaceTop}
+			<div class="surface-top">
+				{@render surfaceTop()}
+			</div>
+		{/if}
+
 		<div class="display-area">
 			{@render display()}
 		</div>
+
+		{#if rxState}
+			<div class="rx-module" data-rx={rxState} aria-hidden="true">
+				<span class="rx-title mono">RX</span>
+				<span class="rx-row rx-row--in">
+					<span class="rx-bulb"></span>
+					<span class="mono">IN</span>
+				</span>
+				<span class="rx-row rx-row--done">
+					<span class="rx-bulb"></span>
+					<span class="mono">DONE</span>
+				</span>
+			</div>
+		{/if}
 
 		<div class="front">
 			{@render front()}
 		</div>
 
 		<footer class="device-bottom" aria-hidden="true">
-			<span class="brand mono">∅ LANGLINK</span>
+			<span class="brand mono">∅ LINGK</span>
 			<span class="vent"></span>
 		</footer>
 	</div>
@@ -272,6 +297,99 @@
 		min-height: 0;
 	}
 
+	.surface-top {
+		position: relative;
+		z-index: 2;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+
+	.rx-module {
+		position: absolute;
+		z-index: 4;
+		right: clamp(0.18rem, 0.9vw, 0.42rem);
+		top: clamp(19rem, 46svh, 24.5rem);
+		display: grid;
+		gap: 0.34rem;
+		width: clamp(3.1rem, 8vw, 3.7rem);
+		padding: 0.62rem 0.42rem 0.58rem;
+		border: 1px solid oklch(0.38 0.005 250 / 0.8);
+		border-radius: 0.5rem;
+		background:
+			linear-gradient(180deg, oklch(0.17 0.004 250), oklch(0.095 0.004 250)),
+			repeating-linear-gradient(
+				90deg,
+				oklch(1 0 0 / 0.018) 0,
+				oklch(1 0 0 / 0.018) 1px,
+				transparent 1px,
+				transparent 3px
+			);
+		box-shadow:
+			inset 0 1px 0 oklch(1 0 0 / 0.08),
+			inset 0 -1px 0 oklch(0 0 0 / 0.82),
+			0 0 0 1px oklch(0 0 0 / 0.7),
+			0 8px 16px -10px oklch(0 0 0 / 0.9);
+		pointer-events: none;
+	}
+
+	.rx-title {
+		justify-self: center;
+		margin-bottom: 0.12rem;
+		font-size: 0.58rem;
+		font-weight: 800;
+		letter-spacing: 0.16em;
+		color: oklch(0.68 0.005 250);
+	}
+
+	.rx-row {
+		display: grid;
+		grid-template-columns: 0.55rem 1fr;
+		align-items: center;
+		gap: 0.28rem;
+		font-size: 0.46rem;
+		font-weight: 800;
+		letter-spacing: 0.1em;
+		color: oklch(0.48 0.005 250);
+	}
+
+	.rx-bulb {
+		width: 0.48rem;
+		height: 0.48rem;
+		border-radius: 999px;
+		background: var(--led-dim);
+		box-shadow: inset 0 0 2px oklch(0 0 0 / 0.75);
+		transition:
+			background 180ms ease,
+			box-shadow 180ms ease,
+			opacity 180ms ease;
+	}
+
+	.rx-module[data-rx='receiving'] .rx-row--in {
+		color: oklch(0.78 0.12 75);
+	}
+
+	.rx-module[data-rx='receiving'] .rx-row--in .rx-bulb {
+		background: var(--led-amber);
+		box-shadow:
+			inset 0 0 2px oklch(0 0 0 / 0.35),
+			0 0 7px oklch(0.82 0.16 80 / 0.75),
+			0 0 16px oklch(0.82 0.16 80 / 0.32);
+		animation: rx-pulse 820ms ease-in-out infinite;
+	}
+
+	.rx-module[data-rx='done'] .rx-row--done {
+		color: oklch(0.82 0.16 145);
+	}
+
+	.rx-module[data-rx='done'] .rx-row--done .rx-bulb {
+		background: var(--led-green);
+		box-shadow:
+			inset 0 0 2px oklch(0 0 0 / 0.35),
+			0 0 8px oklch(0.78 0.2 150 / 0.82),
+			0 0 20px oklch(0.78 0.2 150 / 0.36);
+	}
+
 	.front {
 		position: relative;
 		z-index: 2;
@@ -321,6 +439,24 @@
 		.device {
 			flex: 0 0 auto;
 			height: min(94svh, 56rem);
+		}
+	}
+
+	@keyframes rx-pulse {
+		0%,
+		100% {
+			filter: brightness(0.82);
+			opacity: 0.68;
+		}
+		45% {
+			filter: brightness(1.35);
+			opacity: 1;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.rx-module[data-rx='receiving'] .rx-row--in .rx-bulb {
+			animation-duration: 1ms;
 		}
 	}
 </style>

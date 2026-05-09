@@ -8,6 +8,7 @@ import {
 	setAccountCookie
 } from '$lib/server/access';
 import { getStripeEnv } from '$lib/server/env';
+import type { RequestHandler } from './$types';
 
 const plans = {
 	talk_1h: { label: '1 hour talk time', envKey: 'oneHourPriceId' },
@@ -20,7 +21,7 @@ function isPlanId(value: unknown): value is PlanId {
 	return typeof value === 'string' && value in plans;
 }
 
-export async function POST({ cookies, locals, request, url }) {
+export const POST: RequestHandler = async ({ cookies, locals, request, url }) => {
 	const body = await request.json().catch(() => null);
 	const requestedPlan = body?.planId;
 
@@ -77,4 +78,4 @@ export async function POST({ cookies, locals, request, url }) {
 	}
 
 	return json({ url: session.url });
-}
+};

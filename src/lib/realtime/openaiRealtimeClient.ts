@@ -4,15 +4,18 @@ export type OpenAIRealtimeClientOptions = {
 	targetLanguage: string;
 	openAITranslationLanguage: string;
 	sourceTrack: MediaStreamTrack;
+	tokenEndpoint?: string;
 	onTranslatedAudio: (stream: MediaStream) => void | Promise<void>;
 	onMetric?: (name: string) => void;
+	onOutputState?: (state: 'streaming' | 'complete' | 'interrupted') => void;
+	onRealtimeEvent?: (type: string) => void;
 	onStatus?: (status: string) => void;
 	onError?: (error: Error) => void;
 };
 
 function getStoredOpenAIKey() {
 	try {
-		return localStorage.getItem('langlink:openai-api-key') || undefined;
+		return localStorage.getItem('lingk:openai-api-key') || undefined;
 	} catch {
 		return undefined;
 	}
@@ -35,7 +38,7 @@ export class OpenAIRealtimeClient {
 		this.#options.onStatus?.('fetching_token');
 		this.#options.onMetric?.('openai_token_start');
 		const usageSessionId = `openai:${this.#options.roomId}:${this.#options.participantId}:${crypto.randomUUID()}`;
-		const tokenResponse = await fetch('/api/openai/realtime-token', {
+		const tokenResponse = await fetch(this.#options.tokenEndpoint ?? '/api/openai/realtime-token', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -51,6 +54,7 @@ export class OpenAIRealtimeClient {
 			throw new Error(await tokenResponse.text());
 		}
 
+		this.#options.onRealtimeEvent?.(`token:${tokenResponse.status}`);
 		const token = await tokenResponse.json();
 		this.#usageSessionId = token.usageSessionId ?? usageSessionId;
 		this.#options.onMetric?.('openai_token_end');
@@ -77,7 +81,7 @@ export class OpenAIRealtimeClient {
 			});
 		};
 		this.#dataChannel.onmessage = (event) => {
-			this.#handleRealtimeEvent(event.data);
+			void this.#handleRealtimeEvent(event.data);
 		};
 		pc.addTrack(this.#sourceTrack, new MediaStream([this.#sourceTrack]));
 
@@ -119,6 +123,7 @@ export class OpenAIRealtimeClient {
 		if (!sdpResponse.ok) {
 			throw new Error(`OpenAI SDP exchange failed with ${sdpResponse.status}`);
 		}
+		this.#options.onRealtimeEvent?.(`sdp:${sdpResponse.status}`);
 		this.#options.onMetric?.('openai_sdp_end');
 
 		await pc.setRemoteDescription({
@@ -163,11 +168,30 @@ export class OpenAIRealtimeClient {
 
 		try {
 			const event = JSON.parse(text) as { type?: unknown };
+			if (typeof event.type === 'string') {
+				this.#options.onRealtimeEvent?.(event.type);
+			}
 			if (event.type === 'session.output_audio.delta') {
 				this.#options.onMetric?.('openai_first_output_audio_delta');
+				this.#options.onOutputState?.('streaming');
 			}
 			if (event.type === 'session.output_transcript.delta') {
 				this.#options.onMetric?.('openai_first_output_transcript_delta');
+				this.#options.onOutputState?.('streaming');
+			}
+			if (
+				event.type === 'session.output_audio.done' ||
+				event.type === 'session.output_transcript.done' ||
+				event.type === 'response.output_audio_transcript.done' ||
+				event.type === 'response.output_audio.done'
+			) {
+				this.#options.onOutputState?.('complete');
+			}
+			if (event.type === 'response.done') {
+				const response = (event as { response?: { status?: unknown } }).response;
+				this.#options.onOutputState?.(
+					response?.status === 'completed' ? 'complete' : 'interrupted'
+				);
 			}
 		} catch {
 			// Ignore malformed diagnostics payloads.

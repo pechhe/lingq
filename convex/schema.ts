@@ -34,6 +34,7 @@ export default defineSchema({
 		status: v.union(v.literal('active'), v.literal('left'))
 	})
 		.index('by_roomId', ['roomId'])
+		.index('by_roomId_and_status', ['roomId', 'status'])
 		.index('by_roomId_and_participantId', ['roomId', 'participantId']),
 	latencyEvents: defineTable({
 		roomId: v.string(),
@@ -78,6 +79,11 @@ export default defineSchema({
 		updatedAt: v.number()
 	})
 		.index('by_accountId', ['accountId'])
+		.index('by_accountId_and_status_and_currentPeriodEnd', [
+			'accountId',
+			'status',
+			'currentPeriodEnd'
+		])
 		.index('by_stripeSubscriptionId', ['stripeSubscriptionId']),
 	usageSessions: defineTable({
 		sessionId: v.string(),
@@ -112,5 +118,6 @@ export default defineSchema({
 		source: v.string()
 	})
 		.index('by_accountId', ['accountId'])
+		.index('by_accountId_and_kind_and_at', ['accountId', 'kind', 'at'])
 		.index('by_roomId', ['roomId'])
 });

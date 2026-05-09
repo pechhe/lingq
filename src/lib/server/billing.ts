@@ -1,4 +1,5 @@
 import { api } from '../../../convex/_generated/api';
+import { normaliseRoomId } from '$lib/roomIds';
 import { getConvexClient } from './convex';
 
 export const planPriceMap = {
@@ -26,7 +27,10 @@ export async function startUsageSession(input: {
 	startedAt?: number;
 	source: string;
 }) {
-	return await getConvexClient().mutation(api.billing.startUsageSession, input);
+	return await getConvexClient().mutation(api.billing.startUsageSession, {
+		...input,
+		roomId: normaliseRoomId(input.roomId)
+	});
 }
 
 export async function endUsageSession(input: {
