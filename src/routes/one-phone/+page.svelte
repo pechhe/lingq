@@ -784,17 +784,15 @@
 		min-width: 0;
 		border-radius: 0;
 		background: transparent;
-		box-shadow:
-			inset 0 1px 0 oklch(1 0 0 / 0.035),
-			inset 0 -1px 0 oklch(0 0 0 / 0.46);
+		box-shadow: none;
 		color: oklch(0.5 0.005 250);
 		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
 		font-size: 0.48rem;
 		font-weight: 800;
 		letter-spacing: 0.12em;
 		text-transform: uppercase;
-		min-height: 1.15rem;
-		padding: 0.08rem 0.45rem;
+		min-height: 0.9rem;
+		padding: 0;
 		opacity: 0.78;
 	}
 
