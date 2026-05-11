@@ -194,10 +194,20 @@ function loadAll(): Promise<void> {
 	return loadPromise;
 }
 
-function fire(buffer: AudioBuffer, rate = 1) {
+async function ensureContextRunning(ctx: AudioContext): Promise<boolean> {
+	if (ctx.state === 'running') return true;
+	try {
+		await ctx.resume();
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function fire(buffer: AudioBuffer, rate = 1) {
 	const ctx = getContext();
 	if (!ctx || !masterGain) return;
-	if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+	if (!(await ensureContextRunning(ctx))) return;
 	const source = ctx.createBufferSource();
 	source.buffer = buffer;
 	source.playbackRate.value = rate;
@@ -207,11 +217,11 @@ function fire(buffer: AudioBuffer, rate = 1) {
 
 export function playClick(kind: ClickKind) {
 	if (clickBuffer) {
-		fire(clickBuffer, CLICK_RATE[kind]);
+		void fire(clickBuffer, CLICK_RATE[kind]);
 		return;
 	}
 	void loadAll().then(() => {
-		if (clickBuffer) fire(clickBuffer, CLICK_RATE[kind]);
+		if (clickBuffer) void fire(clickBuffer, CLICK_RATE[kind]);
 	});
 }
 
@@ -227,14 +237,14 @@ export function playKey(phase: KeyPhase) {
 		const idx = keyRotateIdx % keyBuffers.length;
 		keyRotateIdx = (keyRotateIdx + 1) % keyBuffers.length;
 		lastKeyPressIdx = idx;
-		fire(keyBuffers[idx].press);
+		void fire(keyBuffers[idx].press);
 	} else {
-		fire(keyBuffers[lastKeyPressIdx].release);
+		void fire(keyBuffers[lastKeyPressIdx].release);
 	}
 }
 
-export function unlockClickAudio() {
+export async function unlockClickAudio() {
 	const ctx = getContext();
-	if (ctx?.state === 'suspended') void ctx.resume().catch(() => {});
-	void loadAll();
+	if (ctx) await ensureContextRunning(ctx);
+	await loadAll();
 }

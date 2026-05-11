@@ -8,8 +8,6 @@ export class StereoOutputRouter {
 	#audioContext?: AudioContext;
 	#source?: MediaStreamAudioSourceNode;
 	#panner?: StereoPannerNode;
-	#destination?: MediaStreamAudioDestinationNode;
-	#audioElement?: HTMLAudioElement;
 	#fallbackElement?: HTMLAudioElement;
 
 	async unlock() {
@@ -32,22 +30,12 @@ export class StereoOutputRouter {
 
 		const source = audioContext.createMediaStreamSource(stream);
 		const panner = audioContext.createStereoPanner();
-		const destination = audioContext.createMediaStreamDestination();
 		panner.pan.value = getStereoPanValue(mode);
-		source.connect(panner).connect(destination);
-		panner.connect(audioContext.destination);
-
-		const audioElement = new Audio();
-		audioElement.autoplay = true;
-		audioElement.setAttribute('playsinline', '');
-		audioElement.srcObject = destination.stream;
-		await audioElement.play();
+		source.connect(panner).connect(audioContext.destination);
 
 		this.#audioContext = audioContext;
 		this.#source = source;
 		this.#panner = panner;
-		this.#destination = destination;
-		this.#audioElement = audioElement;
 	}
 
 	async playFallback(stream: MediaStream) {
@@ -68,15 +56,10 @@ export class StereoOutputRouter {
 	stop() {
 		this.#source?.disconnect();
 		this.#panner?.disconnect();
-		this.#destination?.disconnect();
-		this.#audioElement?.pause();
-		if (this.#audioElement) this.#audioElement.srcObject = null;
 		this.#fallbackElement?.pause();
 		if (this.#fallbackElement) this.#fallbackElement.srcObject = null;
 		this.#source = undefined;
 		this.#panner = undefined;
-		this.#destination = undefined;
-		this.#audioElement = undefined;
 		this.#fallbackElement = undefined;
 	}
 

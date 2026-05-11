@@ -31,8 +31,8 @@
 				values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"
 				result="b"
 			></feColorMatrix>
-			<feOffset in="r" dx="-1.9" result="r-off"></feOffset>
-			<feOffset in="b" dx="2.2" result="b-off"></feOffset>
+			<feOffset in="r" dx="-0.75" result="r-off"></feOffset>
+			<feOffset in="b" dx="0.85" result="b-off"></feOffset>
 			<feBlend in="r-off" in2="g" mode="screen" result="rg"></feBlend>
 			<feBlend in="rg" in2="b-off" mode="screen"></feBlend>
 		</filter>
@@ -80,11 +80,11 @@
 		--crt-hue-green: 140 240 165;
 		--crt-hue-amber: 245 195 110;
 		--crt-px: 2px;
-		--crt-grid-v: 0.08;
-		--crt-grid-h: 0.45;
+		--crt-grid-v: 0.055;
+		--crt-grid-h: 0.26;
 		--crt-scan-ms: 17ms;
-		--crt-scan-strength: 1.06;
-		--crt-beam-strength: 0.22;
+		--crt-scan-strength: 1.025;
+		--crt-beam-strength: 0.12;
 		--crt-grid-bg: rgba(8, 6, 4, 0.55);
 
 		--crt-hue: var(--crt-hue-amber);
@@ -115,7 +115,6 @@
 		width: 100%;
 		height: 100%;
 		min-height: inherit;
-		filter: blur(0.3px);
 	}
 
 	.content {
@@ -126,8 +125,8 @@
 		font-family: ui-monospace, 'SF Mono', Menlo, 'Roboto Mono', monospace;
 		letter-spacing: 0.02em;
 		text-shadow:
-			0 0 6px var(--crt-glow-soft),
-			0 0 18px var(--crt-glow);
+			0 0 3px var(--crt-glow-soft),
+			0 0 10px var(--crt-glow);
 	}
 
 	.screen[data-tone='amber'] .content {
@@ -242,16 +241,16 @@
 	/* Per-token phosphor glow + chromatic aberration on tagged text */
 	:global(.crt-text) {
 		text-shadow:
-			0 0 6px var(--crt-glow-soft),
-			0 0 18px var(--crt-glow),
-			0 0 32px var(--crt-glow-soft);
+			0 0 3px var(--crt-glow-soft),
+			0 0 10px var(--crt-glow),
+			0 0 18px var(--crt-glow-soft);
 	}
 
 	:global(.crt-text-strong) {
 		text-shadow:
-			0 0 6px var(--crt-glow-soft),
-			0 0 18px var(--crt-glow),
-			0 0 32px var(--crt-glow);
+			0 0 3px var(--crt-glow-soft),
+			0 0 10px var(--crt-glow),
+			0 0 18px var(--crt-glow);
 		filter: url(#crt-rgb-split);
 	}
 
@@ -329,6 +328,36 @@
 			-webkit-mask-position:
 				0 50%,
 				0 50%;
+		}
+	}
+
+	@media (max-width: 640px), (pointer: coarse) {
+		.screen-inner {
+			--crt-grid-v: 0.035;
+			--crt-grid-h: 0.14;
+			--crt-scan-strength: 1.01;
+			--crt-beam-strength: 0.06;
+			animation: none;
+		}
+
+		.content,
+		:global(.crt-text),
+		:global(.crt-text-strong) {
+			text-shadow: 0 0 5px var(--crt-glow-soft);
+		}
+
+		:global(.crt-text-strong),
+		:global(.crt-fringe) {
+			filter: none;
+		}
+
+		.scan-beam {
+			animation: none;
+			opacity: 0.35;
+		}
+
+		.vignette {
+			background: radial-gradient(ellipse at 50% 40%, transparent 58%, oklch(0 0 0 / 0.32) 100%);
 		}
 	}
 </style>

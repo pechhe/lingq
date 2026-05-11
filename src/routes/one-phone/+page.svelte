@@ -680,6 +680,15 @@
 		{#if uiState === 'setup' || uiState === 'requesting_microphone' || uiState === 'error'}
 			<div class="start-row">
 				<DeviceButton
+					ariaLabel={splitOutput ? 'Use both-ear output' : 'Use split earbud output'}
+					ariaPressed={splitOutput}
+					pressed={splitOutput}
+					onclick={toggleOutputMode}
+				>
+					<Headphones size={18} />
+					<span>{splitOutput ? 'SPLIT' : 'BOTH'}</span>
+				</DeviceButton>
+				<DeviceButton
 					tone="orange"
 					size="lg"
 					disabled={uiState === 'requesting_microphone'}
@@ -908,8 +917,14 @@
 	}
 
 	.start-row {
-		display: block;
+		display: grid;
+		grid-template-columns: minmax(5.6rem, 0.38fr) minmax(0, 1fr);
+		gap: 0.4rem;
 		width: 100%;
+	}
+
+	.start-row :global(.key) {
+		min-height: 4.1rem;
 	}
 
 	.handoff-deck {
