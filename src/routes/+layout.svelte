@@ -2,8 +2,14 @@
 	import { onMount } from 'svelte';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import { browser, dev } from '$app/environment';
+	import { Agentation, type AnnotationProps } from 'sv-agentation';
 
 	let { children } = $props();
+
+	const annotationProps: AnnotationProps = {
+		workspaceRoot: '/Users/admin/Documents/2. coding projects.nosync/langlink'
+	};
 
 	onMount(() => {
 		if (!('serviceWorker' in navigator)) return;
@@ -25,3 +31,7 @@
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 {@render children()}
+
+{#if browser && dev}
+	<Agentation {...annotationProps} />
+{/if}

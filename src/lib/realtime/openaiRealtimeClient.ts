@@ -1,3 +1,5 @@
+export type TranslationOutputState = 'streaming' | 'complete' | 'interrupted';
+
 export type OpenAIRealtimeClientOptions = {
 	roomId: string;
 	participantId: string;
@@ -7,11 +9,30 @@ export type OpenAIRealtimeClientOptions = {
 	tokenEndpoint?: string;
 	onTranslatedAudio: (stream: MediaStream) => void | Promise<void>;
 	onMetric?: (name: string) => void;
-	onOutputState?: (state: 'streaming' | 'complete' | 'interrupted') => void;
+	onOutputState?: (state: TranslationOutputState) => void;
 	onRealtimeEvent?: (type: string) => void;
 	onStatus?: (status: string) => void;
 	onError?: (error: Error) => void;
 };
+
+export const TRANSLATION_OUTPUT_IDLE_MS = 1200;
+
+export function getTranslationOutputState(eventType: string): TranslationOutputState | undefined {
+	if (
+		eventType === 'session.output_audio.delta' ||
+		eventType === 'session.output_transcript.delta'
+	) {
+		return 'streaming';
+	}
+	if (
+		eventType === 'session.closed' ||
+		eventType === 'session.output_audio.done' ||
+		eventType === 'session.output_transcript.done'
+	) {
+		return 'complete';
+	}
+	return undefined;
+}
 
 function getStoredOpenAIKey() {
 	try {
@@ -27,6 +48,7 @@ export class OpenAIRealtimeClient {
 	#sourceTrack: MediaStreamTrack;
 	#options: OpenAIRealtimeClientOptions;
 	#usageSessionId = '';
+	#outputIdleTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(options: OpenAIRealtimeClientOptions) {
 		this.#options = options;
@@ -142,6 +164,7 @@ export class OpenAIRealtimeClient {
 
 	disconnect() {
 		const usageSessionId = this.#usageSessionId;
+		this.#clearOutputIdleTimer();
 		this.#dataChannel?.close();
 		this.#pc?.close();
 		this.#dataChannel = undefined;
@@ -161,6 +184,27 @@ export class OpenAIRealtimeClient {
 		}
 	}
 
+	#clearOutputIdleTimer() {
+		if (this.#outputIdleTimer) {
+			clearTimeout(this.#outputIdleTimer);
+			this.#outputIdleTimer = undefined;
+		}
+	}
+
+	#markOutputStreaming() {
+		this.#clearOutputIdleTimer();
+		this.#options.onOutputState?.('streaming');
+		this.#outputIdleTimer = setTimeout(() => {
+			this.#outputIdleTimer = undefined;
+			this.#options.onOutputState?.('complete');
+		}, TRANSLATION_OUTPUT_IDLE_MS);
+	}
+
+	#markOutputComplete() {
+		this.#clearOutputIdleTimer();
+		this.#options.onOutputState?.('complete');
+	}
+
 	async #handleRealtimeEvent(payload: unknown) {
 		const text =
 			typeof payload === 'string' ? payload : payload instanceof Blob ? await payload.text() : '';
@@ -168,30 +212,21 @@ export class OpenAIRealtimeClient {
 
 		try {
 			const event = JSON.parse(text) as { type?: unknown };
-			if (typeof event.type === 'string') {
-				this.#options.onRealtimeEvent?.(event.type);
-			}
+			if (typeof event.type !== 'string') return;
+
+			this.#options.onRealtimeEvent?.(event.type);
 			if (event.type === 'session.output_audio.delta') {
 				this.#options.onMetric?.('openai_first_output_audio_delta');
-				this.#options.onOutputState?.('streaming');
 			}
 			if (event.type === 'session.output_transcript.delta') {
 				this.#options.onMetric?.('openai_first_output_transcript_delta');
-				this.#options.onOutputState?.('streaming');
 			}
-			if (
-				event.type === 'session.output_audio.done' ||
-				event.type === 'session.output_transcript.done' ||
-				event.type === 'response.output_audio_transcript.done' ||
-				event.type === 'response.output_audio.done'
-			) {
-				this.#options.onOutputState?.('complete');
-			}
-			if (event.type === 'response.done') {
-				const response = (event as { response?: { status?: unknown } }).response;
-				this.#options.onOutputState?.(
-					response?.status === 'completed' ? 'complete' : 'interrupted'
-				);
+
+			const outputState = getTranslationOutputState(event.type);
+			if (outputState === 'streaming') {
+				this.#markOutputStreaming();
+			} else if (outputState === 'complete') {
+				this.#markOutputComplete();
 			}
 		} catch {
 			// Ignore malformed diagnostics payloads.

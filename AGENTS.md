@@ -9,6 +9,7 @@
 - Prefer `fd` over `find` for routine discovery. Use `find` when portability matters or `fd` is unavailable.
 - Prefer `xh` over `curl` for interactive HTTP requests. Use `curl` when low-level flags or portability matter.
 - Use relevant built-in or project skills when the task clearly matches them.
+- Browser automation: use the shared Chrome for Testing automation profile by default: `bun run browser:start` from the repo root, which runs `node /Users/admin/.agents/skills/browser-tools/browser-start.js --profile` and persists auth under `~/.cache/browser-tools`.
 
 ## Repo Shape
 
@@ -50,6 +51,15 @@
 - For tested business logic, parsers, validators, transforms, or API contracts, run the most targeted relevant `bun test path/to/file.test.ts`.
 - For Svelte, TypeScript, domain-boundary, Convex, or script changes, run `bun run check`; for non-trivial changes in those areas, also run the most targeted relevant tests or `bun run lint` as appropriate.
 - Use browser testing only for user-visible UI changes, especially auth, routing, responsive layout, or interaction changes.
+
+## Browser Automation
+
+- Default to Chrome for Testing through the shared browser-tools launcher: `bun run browser:start`.
+- The persistent automation profile lives at `~/.cache/browser-tools`; keep it separate from personal Chrome/Dia profiles and do not delete it unless intentionally resetting automation logins.
+- For Codex or manual visual checks, reuse the existing `127.0.0.1:9222` browser session before opening another browser.
+- For repeatable E2E tests, use Playwright Test with bundled Chromium when the repo adds Playwright coverage. Keep saved auth state in `.playwright/.auth/` and never commit it.
+- Use Playwright CLI for ad hoc agent exploration when browser-tools is not the right surface.
+- Do not use Dia as the default automation browser. It is fine for manual browsing, but automation should use the dedicated Chrome for Testing profile.
 
 ## Additional Guidance
 

@@ -15,6 +15,7 @@
 	let error = $state('');
 	let createdRoom = $state<{ roomId: string; joinUrl: string } | null>(null);
 	let copied = $state(false);
+	let languagePickerOpen = $state(false);
 
 	async function createRoom() {
 		unlockClickAudio();
@@ -106,7 +107,12 @@
 						<p class="kicker">LIVE TWO-PHONE TRANSLATION</p>
 						<h1>Hold to speak.<br />They hear you<br />in their language.</h1>
 					</div>
-					<LanguagePicker bind:value={spokenLanguage} label="Your language" tone="amber" />
+					<LanguagePicker
+						bind:value={spokenLanguage}
+						bind:open={languagePickerOpen}
+						label="Your language"
+						tone="amber"
+					/>
 					{#if error}
 						<p class="error crt-fringe">⚠ {error}</p>
 					{/if}
@@ -140,14 +146,16 @@
 
 	{#snippet front()}
 		{#if !createdRoom}
-			<div class="setup-actions">
-				<DeviceButton tone="orange" size="lg" disabled={pending} onclick={createRoom}>
-					<span>{pending ? 'CREATING…' : 'CREATE ROOM'}</span>
-				</DeviceButton>
-				<DeviceButton disabled={pending} onclick={startOnePhoneMode}>
-					<span>ONE PHONE</span>
-				</DeviceButton>
-			</div>
+			{#if !languagePickerOpen}
+				<div class="setup-actions">
+					<DeviceButton tone="orange" size="lg" disabled={pending} onclick={createRoom}>
+						<span>{pending ? 'CREATING…' : 'CREATE ROOM'}</span>
+					</DeviceButton>
+					<DeviceButton disabled={pending} onclick={startOnePhoneMode}>
+						<span>ONE PHONE</span>
+					</DeviceButton>
+				</div>
+			{/if}
 		{:else}
 			<div class="primary-row">
 				<DeviceButton tone="orange" size="lg" onclick={joinCreatedRoom}>
@@ -180,20 +188,27 @@
 			0 1px 0 oklch(0.32 0.005 250 / 0.4);
 	}
 
+	:global(.screen[data-tone='amber'] .content) {
+		padding: clamp(1.1rem, 4.2vw, 1.45rem) clamp(1rem, 4vw, 1.35rem) clamp(1rem, 3.8vw, 1.25rem);
+	}
+
 	.screen-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 0.85rem;
+		gap: clamp(0.9rem, 3vw, 1.25rem);
 		height: 100%;
 		min-height: inherit;
+		overflow: hidden;
 	}
 
 	.screen-head {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		font-size: 0.62rem;
-		letter-spacing: 0.18em;
+		gap: 1rem;
+		padding: 0.1rem 0.05rem 0;
+		font-size: clamp(0.56rem, 2.2vw, 0.62rem);
+		letter-spacing: 0.16em;
 		color: var(--screen-amber-dim);
 		text-transform: uppercase;
 	}
@@ -205,16 +220,18 @@
 	.hero {
 		display: flex;
 		flex-direction: column;
-		gap: 0.55rem;
+		gap: 0.65rem;
 		flex: 1;
 		justify-content: center;
+		min-width: 0;
+		padding-inline: 0.05rem;
 	}
 
 	.kicker {
 		margin: 0;
-		font-size: 0.62rem;
+		font-size: clamp(0.54rem, 2.15vw, 0.62rem);
 		font-weight: 700;
-		letter-spacing: 0.2em;
+		letter-spacing: 0.18em;
 		color: var(--screen-amber-dim);
 		text-transform: uppercase;
 	}
@@ -222,11 +239,11 @@
 	h1 {
 		margin: 0;
 		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: clamp(1.2rem, 5.5vw, 1.7rem);
+		font-size: clamp(1.1rem, 5vw, 1.55rem);
 		font-weight: 600;
-		line-height: 1.2;
+		line-height: 1.24;
 		color: var(--screen-amber);
-		letter-spacing: 0;
+		letter-spacing: -0.015em;
 	}
 
 	.error {
@@ -302,7 +319,17 @@
 
 	.setup-actions {
 		display: grid;
-		grid-template-columns: 2fr 1fr;
-		gap: 0.5rem;
+		grid-template-columns: minmax(0, 2fr) minmax(6.6rem, 1fr);
+		gap: clamp(0.55rem, 2vw, 0.75rem);
+	}
+
+	@media (max-width: 23rem) {
+		:global(.screen[data-tone='amber'] .content) {
+			padding-inline: 0.85rem;
+		}
+
+		.setup-actions {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

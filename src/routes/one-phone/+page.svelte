@@ -91,9 +91,9 @@
 		!splitOutput
 			? 'both'
 			: activeSide === 'me'
-				? 'right'
+				? 'left'
 				: activeSide === 'them'
-					? 'left'
+					? 'right'
 					: 'both'
 	);
 	let vizStream = $derived(
@@ -349,7 +349,10 @@
 
 	function outputModeForSide(side: Side): OutputPanMode {
 		if (!splitOutput) return 'both';
-		return side === 'me' ? 'right' : 'left';
+		// Each speaker's translation goes to the *other* earbud so that the
+		// listener (not the speaker) hears it. Convention: "me" wears the right
+		// earbud, "them" wears the left earbud.
+		return side === 'me' ? 'left' : 'right';
 	}
 
 	function ensureOutputRouter(side: Side) {

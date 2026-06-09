@@ -319,8 +319,8 @@
 <style>
 	.viz {
 		position: relative;
-		width: 100%;
-		height: 100%;
+		flex: 1 1 auto;
+		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
 		border-radius: 0.35rem;

@@ -19,7 +19,6 @@
 	<div class="row">
 		<StatusBadge label="MIC" level={mic} />
 		<StatusBadge label="LINK" level={participant} />
-		<StatusBadge label="XLATE" level={translation} />
 	</div>
 	<p class="detail">{detail}</p>
 </section>

@@ -5,15 +5,15 @@
 
 	let {
 		value = $bindable<LanguageCode>(),
+		open = $bindable(false),
 		label = 'Language',
 		tone = 'green'
 	}: {
 		value: LanguageCode;
+		open?: boolean;
 		label?: string;
 		tone?: 'amber' | 'green';
 	} = $props();
-
-	let open = $state(false);
 	let query = $state('');
 
 	let selectedLabel = $derived(getLanguageLabel(value));
@@ -203,13 +203,15 @@
 	.sheet {
 		position: fixed;
 		left: 50%;
-		bottom: clamp(1rem, 4vw, 2rem);
+		bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(6.5rem, 16svh, 8.5rem));
 		transform: translateX(-50%);
 		z-index: 51;
 		display: grid;
+		grid-template-rows: auto auto minmax(0, 1fr);
 		gap: 0.75rem;
-		width: min(92vw, 24rem);
-		max-height: min(36rem, 84svh);
+		width: min(88vw, 22rem);
+		max-height: min(30rem, 58svh);
+		overflow: hidden;
 		border-radius: 1rem;
 		background: linear-gradient(180deg, var(--device-body-top), var(--device-body-bottom));
 		padding: 1rem;
@@ -287,8 +289,10 @@
 
 	.body {
 		min-height: 0;
-		overflow: auto;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding-right: 0.1rem;
+		border-radius: 0.65rem;
 	}
 
 	.body ul {

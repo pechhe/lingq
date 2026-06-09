@@ -8,6 +8,7 @@
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
 	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
+	import TranslationMeter from '$lib/components/TranslationMeter.svelte';
 	import MicDevicePicker from '$lib/components/MicDevicePicker.svelte';
 	import PushToTalkButton from '$lib/components/PushToTalkButton.svelte';
 	import QrCode from '$lib/components/QrCode.svelte';
@@ -125,6 +126,9 @@
 			: incomingTranslationState === 'complete'
 				? 'done'
 				: 'idle'
+	);
+	let rxActiveBars = $derived<number>(
+		rxState === 'receiving' ? 8 : rxState === 'done' ? 13 : 1
 	);
 	let currentMicDeviceId = $derived(micStream?.getAudioTracks()[0]?.getSettings().deviceId);
 
@@ -804,7 +808,6 @@
 <DeviceFrame
 	topLabel="ROOM {roomId.toUpperCase()}"
 	{topLed}
-	rxState={isInSetup ? undefined : rxState}
 >
 	{#snippet display()}
 		<DeviceScreen tone="green">
@@ -884,6 +887,9 @@
 						</dl>
 						<div class="viz-area">
 							<AudioVisualizer stream={vizStream} color={vizColor} />
+							{#if !isInSetup}
+								<TranslationMeter state={rxState} activeBars={rxActiveBars} />
+							{/if}
 							<span class="viz-label mono crt-fringe">
 								{#if uiState === 'speaking'}
 									▶ TX · YOU
@@ -893,8 +899,6 @@
 									× RX · INTERRUPTED
 								{:else if translatedAudioStream && !muted}
 									◀ RX · TRANSLATING
-								{:else}
-									— STANDBY
 								{/if}
 							</span>
 						</div>
@@ -1079,13 +1083,22 @@
 	.viz-area {
 		position: relative;
 		flex: 1;
+		display: flex;
+		align-items: stretch;
+		gap: clamp(0.4rem, 1.4vw, 0.7rem);
 		min-height: 4rem;
+		padding: 0.45rem 0.55rem 0.5rem 0.55rem;
 		border-radius: 0.4rem;
 		background: oklch(0.06 0.01 145);
 		box-shadow:
 			inset 0 0 0 1px oklch(0.4 0.1 145 / 0.18),
 			inset 0 1px 4px oklch(0 0 0 / 0.6);
 		overflow: hidden;
+	}
+
+	.viz-area :global(.viz) {
+		flex: 1 1 auto;
+		min-width: 0;
 	}
 
 	.viz-label {
@@ -1101,6 +1114,12 @@
 		text-shadow: 0 0 4px oklch(0 0 0 / 0.8);
 	}
 
+	.viz-area :global(.meter) {
+		flex: 0 0 auto;
+		width: clamp(2.4rem, 6.5vw, 3rem);
+		min-height: 0;
+	}
+
 	.top-row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
@@ -1113,24 +1132,21 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 0.3rem;
-		padding: 0.35rem 0.4rem 0.45rem;
-		border: 1px solid oklch(0.45 0.1 70 / 0.35);
-		border-radius: 0.4rem;
-		background: oklch(0.08 0.02 60);
+		padding: 0;
+		border: none;
+		background: transparent;
 		color: var(--screen-amber-dim);
 		cursor: pointer;
-		transition:
-			background 120ms ease,
-			border-color 120ms ease;
+		transform: translate(-0.4rem, -0.4rem);
+		transition: opacity 120ms ease;
 	}
 
 	.qr-tile:hover {
-		background: oklch(0.1 0.03 60);
-		border-color: oklch(0.5 0.12 70 / 0.5);
+		opacity: 0.85;
 	}
 
 	.qr-tile:active {
-		transform: translateY(1px);
+		transform: translate(-0.4rem, calc(-0.4rem + 1px));
 	}
 
 	.qr-frame {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { tick } from 'svelte';
 	import DeviceButton from '$lib/components/DeviceButton.svelte';
 	import DeviceFrame from '$lib/components/DeviceFrame.svelte';
 	import DeviceScreen from '$lib/components/DeviceScreen.svelte';
@@ -10,9 +11,20 @@
 	let pending = $state(false);
 	let error = $state('');
 	let notice = $state('');
+	let registering = $state(false);
+	let emailInput = $state<HTMLInputElement>();
 
-	function tryNow() {
-		goto(resolve('/setup?access=trial'));
+	async function tryNow() {
+		if (registering) {
+			await register();
+			return;
+		}
+
+		registering = true;
+		error = '';
+		notice = '';
+		await tick();
+		emailInput?.focus();
 	}
 
 	async function register() {
@@ -50,11 +62,10 @@
 		pending = false;
 
 		if (result.error) {
-			error = result.error.message ?? 'Could not send sign-in link';
-			return;
+			console.warn('Magic-link email failed; continuing trial flow for now.', result.error);
 		}
 
-		notice = 'Check your email, then open the Lingk link.';
+		goto(resolve('/setup?access=trial'));
 	}
 </script>
 
@@ -71,42 +82,42 @@
 
 		<DeviceScreen tone="amber">
 			<div class="screen-stack">
-				<section class="product-brief">
-					<picture>
-						<img
-							class="product-infographic"
-							src="/images/home-product-infographic.png"
-							width="916"
-							height="1717"
-							decoding="async"
-							fetchpriority="high"
-							alt="Lingk. Live translation in real time. Face to face. Group discussions. Speeches and events. Weddings. Talk naturally, hear your language."
-						/>
-					</picture>
-					<p class="sr-only">
-						Lingk provides live translation in real time for face-to-face conversations, group
-						discussions, speeches, events and weddings. Talk naturally and hear your language.
-					</p>
-				</section>
-
-				<section class="panel">
-					<p class="panel-title crt-fringe">REGISTER</p>
-					<label class="field">
-						<span class="field-label crt-fringe">EMAIL</span>
-						<input
-							bind:value={email}
-							type="email"
-							placeholder="you@example.com"
-							autocomplete="email"
-							onkeydown={(event) => {
-								if (event.key === 'Enter') register();
-							}}
-						/>
-					</label>
-					<DeviceButton tone="orange" size="sm" disabled={pending} onclick={register}>
-						<span>{pending ? 'SENDING' : 'REGISTER'}</span>
-					</DeviceButton>
-				</section>
+				{#if !registering}
+					<section class="product-brief">
+						<picture>
+							<img
+								class="product-infographic"
+								src="/images/home-product-infographic.png"
+								width="916"
+								height="1717"
+								decoding="async"
+								fetchpriority="high"
+								alt="Lingk. Live translation in real time. Face to face. Group discussions. Speeches and events. Weddings. Talk naturally, hear your language."
+							/>
+						</picture>
+						<p class="sr-only">
+							Lingk provides live translation in real time for face-to-face conversations, group
+							discussions, speeches, events and weddings. Talk naturally and hear your language.
+						</p>
+					</section>
+				{:else}
+					<section class="panel" aria-label="Register for Lingk access">
+						<label class="field">
+							<span class="field-label crt-fringe">EMAIL</span>
+							<input
+								bind:this={emailInput}
+								bind:value={email}
+								type="email"
+								placeholder="you@example.com"
+								autocomplete="email"
+								disabled={pending}
+								onkeydown={(event) => {
+									if (event.key === 'Enter') register();
+								}}
+							/>
+						</label>
+					</section>
+				{/if}
 
 				{#if error}
 					<p class="error crt-fringe">⚠ {error}</p>
@@ -147,12 +158,11 @@
 	.screen-stack {
 		display: flex;
 		flex-direction: column;
+		justify-content: center;
 		gap: 0.85rem;
 		height: 100%;
 		min-height: inherit;
-		overflow-y: auto;
-		scrollbar-width: thin;
-		scrollbar-color: oklch(0.4 0.11 70 / 0.45) transparent;
+		overflow: hidden;
 	}
 
 	:global(.screen[data-tone='amber'] .content) {
@@ -161,8 +171,10 @@
 
 	.product-brief {
 		position: relative;
-		flex: 0 0 auto;
+		flex: 1 1 auto;
 		width: 100%;
+		height: 100%;
+		min-height: 0;
 		margin: 0;
 		border-radius: 0;
 		background: oklch(0.045 0.015 145);
@@ -172,7 +184,7 @@
 	.product-brief picture {
 		display: block;
 		width: 100%;
-		height: auto;
+		height: 100%;
 	}
 
 	.product-brief::before,
@@ -183,8 +195,8 @@
 		z-index: 2;
 		pointer-events: none;
 		background-image: url('/images/home-product-infographic.png');
-		background-position: center top;
-		background-size: 100% auto;
+		background-position: center;
+		background-size: contain;
 		background-repeat: no-repeat;
 		mix-blend-mode: screen;
 	}
@@ -201,19 +213,12 @@
 		transform: translateX(2px);
 	}
 
-	.panel-title {
-		margin: 0;
-		font-size: 0.62rem;
-		font-weight: 700;
-		letter-spacing: 0.2em;
-		color: var(--screen-amber-dim);
-		text-transform: uppercase;
-	}
-
 	.product-infographic {
 		display: block;
 		width: 100%;
-		height: auto;
+		height: 100%;
+		object-fit: contain;
+		object-position: center;
 	}
 
 	.sr-only {
@@ -231,11 +236,8 @@
 	.panel {
 		display: grid;
 		gap: 0.6rem;
-		margin: 0 0.85rem 0.85rem;
-		padding: 0.7rem;
-		border: 1px solid oklch(0.45 0.1 70 / 0.35);
-		border-radius: 0.4rem;
-		background: oklch(0.1 0.02 60 / 0.7);
+		width: min(100% - 1.7rem, 33rem);
+		margin: auto;
 	}
 
 	.field {

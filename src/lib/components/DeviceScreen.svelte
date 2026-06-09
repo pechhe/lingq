@@ -48,6 +48,7 @@
 		<div class="vignette" aria-hidden="true"></div>
 		<div class="glare" aria-hidden="true"></div>
 	</div>
+
 </div>
 
 <style>
