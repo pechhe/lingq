@@ -52,6 +52,8 @@
 </div>
 
 <style>
+	/* Recessed display well: the machined chassis dips down into the glass.
+	   Bright metal rim on the outside, dark sunken bezel inside. */
 	.screen {
 		position: relative;
 		display: block;
@@ -59,14 +61,10 @@
 		height: 100%;
 		min-height: 0;
 		flex: 1;
-		padding: 3px 5px 5px 3px;
+		padding: 5px 6px 6px;
 		border-radius: clamp(0.7rem, 1.5vw, 1rem);
-		background: linear-gradient(135deg, oklch(0.045 0.005 250) 0%, oklch(0.075 0.005 250) 100%);
-		box-shadow:
-			inset 2px 2px 3px oklch(0 0 0 / 0.7),
-			inset -1px -1px 2px oklch(0.3 0.005 250 / 0.18),
-			inset 0 0 0 1px oklch(0 0 0 / 0.5),
-			0 0 0 1px oklch(0.32 0.005 250 / 0.4);
+		background: var(--screen-frame);
+		box-shadow: var(--screen-frame-shadow);
 	}
 
 	.filter-defs {

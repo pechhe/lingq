@@ -1,12 +1,138 @@
 @import 'tailwindcss';
 
 :root {
-	--device-body: oklch(0.21 0.005 250);
-	--device-body-top: oklch(0.255 0.005 250);
-	--device-body-bottom: oklch(0.17 0.005 250);
-	--device-bezel: oklch(0.32 0.006 250);
-	--device-shadow: oklch(0.04 0 0);
-	--device-edge-highlight: oklch(0.42 0.006 250);
+	/* ===================== Device chassis material =====================
+	   Premium-audio-gear chassis, ported from the peach-pi composer.
+	   Tint: set --metal-dye (a hue) + --metal-tint-amount (e.g. 18%) to
+	   pigment the whole chassis + caps. 0% = pure neutral (a no-op).
+	   Base variant: silver (default) / dark (:root[data-composer="dark"]). */
+	--metal-dye: oklch(0.6 0.02 250);
+	--metal-tint-amount: 0%;
+
+	/* Neutral body ramp (silver). Overridden by the dark variant. */
+	--chassis-n-top: oklch(0.985 0.002 250);
+	--chassis-n-mid: oklch(0.9 0.003 250);
+	--chassis-n-bot: oklch(0.79 0.003 250);
+
+	/* Dyed body stops — the only layer the tint touches, so it reads as
+	   pigment while the speculars/edges stay neutral metal. */
+	--chassis-top: color-mix(
+		in oklch,
+		var(--chassis-n-top),
+		var(--metal-dye) var(--metal-tint-amount)
+	);
+	--chassis-mid: color-mix(
+		in oklch,
+		var(--chassis-n-mid),
+		var(--metal-dye) var(--metal-tint-amount)
+	);
+	--chassis-bot: color-mix(
+		in oklch,
+		var(--chassis-n-bot),
+		var(--metal-dye) var(--metal-tint-amount)
+	);
+
+	/* Back-compat aliases still consumed by the device pickers. */
+	--device-body-top: var(--chassis-top);
+	--device-body-bottom: var(--chassis-bot);
+	--device-edge-highlight: oklch(1 0.002 250 / 0.88);
+
+	--chassis-surface:
+		linear-gradient(
+			180deg,
+			oklch(1 0.002 250 / 0.42),
+			oklch(0.9 0.003 250 / 0.1) 46%,
+			oklch(0.64 0.003 250 / 0.09) 100%
+		),
+		radial-gradient(ellipse 95% 76% at 24% 20%, oklch(1 0.002 250 / 0.13), transparent 64%),
+		radial-gradient(ellipse 90% 78% at 88% 82%, oklch(0.42 0.003 250 / 0.055), transparent 70%),
+		linear-gradient(180deg, var(--chassis-top) 0%, var(--chassis-mid) 54%, var(--chassis-bot) 100%);
+	--chassis-blend: normal, soft-light, multiply, normal;
+	/* Machined edge: face → sharp near-white highlight → light shade →
+	   dark seat → soft spill (no dark band before the highlight). */
+	--chassis-shadow:
+		inset 0 1px 0 oklch(1 0.002 250 / 0.88), inset 0 3px 5px oklch(1 0.002 250 / 0.24),
+		inset 1px 0 0 oklch(1 0.002 250 / 0.5), inset -1px 0 0 oklch(0.34 0.004 250 / 0.36),
+		0 0 0 0.5px oklch(0.92 0.002 250 / 0.78), 0 -0.5px 0 0.5px oklch(0.97 0.002 250 / 0.7),
+		0 1px 0 1px oklch(0.58 0.004 250 / 0.7), 0 2px 3px 1px oklch(0.22 0.004 250 / 0.6),
+		0 6px 14px -3px oklch(0 0 0 / 0.42), 0 16px 30px -12px oklch(0 0 0 / 0.6);
+	--chassis-overlay:
+		linear-gradient(
+			90deg,
+			oklch(1 0.002 250 / 0.34),
+			transparent 9%,
+			transparent 91%,
+			oklch(0.3 0.004 250 / 0.12)
+		),
+		linear-gradient(
+			180deg,
+			oklch(1 0.002 250 / 0.36),
+			transparent 11%,
+			transparent 88%,
+			oklch(0.3 0.004 250 / 0.16)
+		),
+		radial-gradient(ellipse 130% 60% at 45% 0%, oklch(1 0.002 250 / 0.1), transparent 62%);
+	--chassis-overlay-opacity: 0.66;
+
+	/* Recessed screen lip — the chassis dips into the display well. Bright
+	   silver rim on the outside, dark sunken well inside. */
+	--screen-frame: linear-gradient(180deg, oklch(0.09 0.005 250), oklch(0.06 0.005 250));
+	--screen-frame-shadow:
+		inset 0 6px 14px -3px oklch(0 0 0 / 0.78), inset 0 2px 6px oklch(0 0 0 / 0.6),
+		inset 2px 0 7px -4px oklch(0 0 0 / 0.5), inset -2px 0 7px -4px oklch(0 0 0 / 0.5),
+		inset 0 0 0 1px oklch(0 0 0 / 0.6), 0 -0.5px 0 0.5px oklch(1 0.002 250 / 0.55),
+		0 1px 1px 0 oklch(1 0.002 250 / 0.85), 0 2px 4px 0 oklch(1 0.001 250 / 0.45),
+		0 5px 12px -3px oklch(0.42 0.004 250 / 0.32);
+
+	/* ---- Machined steel cap (PTT dial + square keys) ---- */
+	--cap-n-hi: oklch(0.97 0.002 250);
+	--cap-n-mid: oklch(0.8 0.004 250);
+	--cap-n-lo: oklch(0.6 0.004 250);
+	--cap-n-base: oklch(0.82 0.004 250);
+
+	--cap-hi: color-mix(in oklch, var(--cap-n-hi), var(--metal-dye) var(--metal-tint-amount));
+	--cap-mid: color-mix(in oklch, var(--cap-n-mid), var(--metal-dye) var(--metal-tint-amount));
+	--cap-lo: color-mix(in oklch, var(--cap-n-lo), var(--metal-dye) var(--metal-tint-amount));
+	--cap-base: color-mix(in oklch, var(--cap-n-base), var(--metal-dye) var(--metal-tint-amount));
+
+	--cap-face:
+		radial-gradient(circle at 50% 46%, oklch(1 0.002 250 / 0.5), transparent 46%),
+		conic-gradient(
+			from 0deg,
+			var(--cap-mid) 0deg,
+			var(--cap-lo) 45deg,
+			var(--cap-mid) 90deg,
+			var(--cap-hi) 135deg,
+			var(--cap-mid) 180deg,
+			var(--cap-lo) 225deg,
+			var(--cap-mid) 270deg,
+			var(--cap-hi) 315deg,
+			var(--cap-mid) 360deg
+		),
+		radial-gradient(circle at 50% 50%, var(--cap-base) 0 100%);
+	/* Turned-metal micro grain + two catchlights (bright quadrants). */
+	--cap-texture:
+		radial-gradient(ellipse 70% 52% at 30% 24%, oklch(1 0.002 250 / 0.36), transparent 60%),
+		radial-gradient(ellipse 70% 52% at 72% 78%, oklch(1 0.002 250 / 0.28), transparent 60%),
+		repeating-conic-gradient(
+			from 0deg,
+			oklch(1 0.002 250 / 0.05) 0 1.3deg,
+			oklch(0.42 0.004 250 / 0.045) 1.3deg 2.6deg
+		);
+	--cap-shadow:
+		inset 0 1.5px 0 oklch(1 0.002 250 / 0.9), inset 0 -1.5px 1px oklch(0.42 0.004 250 / 0.55),
+		inset 0 0 0 1px oklch(0.6 0.004 250 / 0.4), 0 0 0 1px oklch(0.34 0.004 250 / 0.6),
+		0 2px 2px oklch(0 0 0 / 0.3), 0 5px 9px -2px oklch(0 0 0 / 0.32);
+	--cap-shadow-pressed:
+		inset 0 2px 5px oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(0.42 0.004 250 / 0.5),
+		inset 0 0 0 1px oklch(0.55 0.004 250 / 0.5), 0 1px 2px oklch(0 0 0 / 0.4);
+	/* Blackish recessed socket the cap sits in; greyer soft spill around it. */
+	--cap-socket: linear-gradient(135deg, oklch(0.05 0.004 250) 0%, oklch(0.09 0.004 250) 100%);
+	--cap-socket-shadow:
+		inset 1px 1px 3px oklch(0 0 0 / 0.85), inset -1px -1px 1px oklch(0.55 0.004 250 / 0.14),
+		inset 0 0 0 1px oklch(0 0 0 / 0.55);
+	--cap-ink: oklch(0.34 0.005 250);
+	--cap-ink-shadow: 0 1px 0 oklch(1 0.002 250 / 0.6), 0 -0.5px 0.5px oklch(0.22 0.005 250 / 0.55);
 
 	--screen-bg: oklch(0.13 0.005 250);
 	--screen-bg-deep: oklch(0.09 0.005 250);
@@ -17,52 +143,32 @@
 
 	--led-orange: oklch(0.74 0.19 55);
 	--led-orange-glow: oklch(0.78 0.21 55);
-	--orange-metal-bg:
-		linear-gradient(180deg, oklch(1 0.05 76 / 0.28) 0%, oklch(1 0.05 76 / 0.1) 8%, transparent 22%),
-		radial-gradient(ellipse 70% 42% at 15% 14%, oklch(1 0.08 76 / 0.14), transparent 58%),
-		radial-gradient(ellipse 85% 48% at 88% 82%, oklch(0.42 0.17 45 / 0.12), transparent 70%),
-		repeating-linear-gradient(
-			90deg,
-			oklch(1 0.03 74 / 0.045) 0px,
-			oklch(1 0.03 74 / 0.045) 1px,
-			oklch(0.42 0.17 48 / 0.06) 1px,
-			oklch(0.42 0.17 48 / 0.06) 2px,
-			transparent 2px,
-			transparent 5px
+
+	/* Warm accent used for the ready/active state on caps + the send glyph. */
+	--accent-orange: oklch(0.74 0.185 52);
+	--accent-orange-bright: oklch(0.82 0.2 58);
+	--accent-orange-glow: oklch(0.78 0.2 55);
+	/* Warm steel cap (orange-tone keys + PTT while transmitting). */
+	--cap-warm-face:
+		radial-gradient(circle at 50% 44%, oklch(1 0.05 74 / 0.4), transparent 46%),
+		conic-gradient(
+			from 0deg,
+			oklch(0.72 0.19 56) 0deg,
+			oklch(0.58 0.2 50) 45deg,
+			oklch(0.74 0.19 58) 90deg,
+			oklch(0.86 0.17 66) 135deg,
+			oklch(0.74 0.19 58) 180deg,
+			oklch(0.58 0.2 50) 225deg,
+			oklch(0.74 0.19 58) 270deg,
+			oklch(0.86 0.17 66) 315deg,
+			oklch(0.72 0.19 56) 360deg
 		),
-		linear-gradient(
-			90deg,
-			oklch(0.5 0.19 50 / 0.18) 0%,
-			transparent 7%,
-			oklch(1 0.07 74 / 0.05) 15%,
-			transparent 30%,
-			transparent 74%,
-			oklch(0.42 0.16 46 / 0.18) 100%
-		),
-		linear-gradient(
-			145deg,
-			oklch(0.82 0.19 61) 0%,
-			oklch(0.75 0.21 58) 32%,
-			oklch(0.66 0.22 55) 72%,
-			oklch(0.55 0.2 50) 100%
-		);
-	--orange-metal-shadow:
-		inset 1px 1px 0 oklch(1 0.05 76 / 0.76), inset 0 4px 0 -1px oklch(1 0.06 74 / 0.48),
-		inset 0 12px 18px -14px oklch(1 0.05 74 / 0.42), inset -1px -1px 0 oklch(0.24 0.11 44 / 0.82),
-		inset 0 -5px 0 -1px oklch(0.24 0.1 42 / 0.78),
-		inset 0 -16px 18px -14px oklch(0.18 0.09 42 / 0.52), inset 0 0 0 1px oklch(0.58 0.19 52 / 0.82),
-		0 1px 2px oklch(0 0 0 / 0.38), 0 0 22px oklch(0.72 0.2 55 / 0.22);
-	--orange-metal-sheen:
-		linear-gradient(90deg, transparent 0%, oklch(1 0.05 74 / 0.1) 8%, transparent 18%),
-		linear-gradient(
-			180deg,
-			oklch(1 0.05 74 / 0.11) 0%,
-			transparent 14%,
-			transparent 82%,
-			oklch(0.22 0.1 44 / 0.08) 100%
-		),
-		radial-gradient(ellipse 90% 35% at 50% 8%, oklch(1 0.04 75 / 0.16) 0%, transparent 68%),
-		radial-gradient(ellipse 68% 24% at 50% 90%, oklch(1 0.04 70 / 0.07) 0%, transparent 72%);
+		radial-gradient(circle at 50% 50%, oklch(0.68 0.2 54) 0 100%);
+	--cap-warm-shadow:
+		inset 0 1.5px 0 oklch(1 0.07 74 / 0.7), inset 0 -1.5px 1px oklch(0.3 0.12 45 / 0.6),
+		inset 0 0 0 1px oklch(0.58 0.19 52 / 0.6), 0 0 0 1px oklch(0.34 0.12 45 / 0.55),
+		0 2px 2px oklch(0 0 0 / 0.3), 0 5px 9px -2px oklch(0 0 0 / 0.32),
+		0 0 26px oklch(0.78 0.2 55 / 0.28);
 	--led-green: oklch(0.78 0.2 150);
 	--led-amber: oklch(0.82 0.16 80);
 	--led-red: oklch(0.66 0.22 28);
@@ -80,6 +186,100 @@
 		sans-serif;
 	color: var(--ink);
 	background: var(--page-bg);
+}
+
+/* ===================== Dark (anodized black) base variant =====================
+   Opt in with data-composer="dark" on <html>. Shares the dyed body/cap stops
+   (so tinting still works) but overrides the neutral base + edge lighting. */
+:root[data-composer='dark'] {
+	--chassis-n-top: oklch(0.235 0.004 265);
+	--chassis-n-mid: oklch(0.17 0.004 265);
+	--chassis-n-bot: oklch(0.115 0.004 265);
+	--device-edge-highlight: oklch(0.62 0.004 265 / 0.5);
+
+	--chassis-surface:
+		linear-gradient(
+			180deg,
+			oklch(0.6 0.004 265 / 0.16),
+			oklch(0.3 0.004 265 / 0.05) 46%,
+			oklch(0.05 0.004 265 / 0.14) 100%
+		),
+		radial-gradient(ellipse 95% 76% at 24% 20%, oklch(0.62 0.004 265 / 0.1), transparent 64%),
+		radial-gradient(ellipse 90% 78% at 88% 82%, oklch(0 0 0 / 0.26), transparent 70%),
+		repeating-linear-gradient(90deg, oklch(0.6 0.004 265 / 0.022) 0 1px, transparent 1px 3px),
+		linear-gradient(180deg, var(--chassis-top) 0%, var(--chassis-mid) 54%, var(--chassis-bot) 100%);
+	--chassis-blend: normal, soft-light, multiply, overlay, normal;
+	--chassis-shadow:
+		inset 0 1px 0 oklch(0.62 0.004 265 / 0.5), inset 0 3px 5px oklch(0.55 0.004 265 / 0.08),
+		inset 1px 0 0 oklch(0.55 0.004 265 / 0.22), inset -1px 0 0 oklch(0 0 0 / 0.55),
+		0 0 0 0.5px oklch(0 0 0 / 0.72), 0 -0.5px 0 0.5px oklch(0.5 0.004 265 / 0.28),
+		0 1px 0 1px oklch(0 0 0 / 0.6), 0 2px 3px 1px oklch(0 0 0 / 0.62),
+		0 6px 14px -3px oklch(0 0 0 / 0.6), 0 16px 30px -12px oklch(0 0 0 / 0.78);
+	--chassis-overlay:
+		linear-gradient(
+			90deg,
+			oklch(0.62 0.004 265 / 0.22),
+			transparent 9%,
+			transparent 91%,
+			oklch(0 0 0 / 0.22)
+		),
+		linear-gradient(
+			180deg,
+			oklch(0.62 0.004 265 / 0.24),
+			transparent 11%,
+			transparent 88%,
+			oklch(0 0 0 / 0.28)
+		),
+		radial-gradient(ellipse 130% 60% at 45% 0%, oklch(0.6 0.004 265 / 0.08), transparent 62%);
+	--chassis-overlay-opacity: 0.5;
+
+	--screen-frame: linear-gradient(180deg, oklch(0.08 0.004 265), oklch(0.05 0.004 265));
+	--screen-frame-shadow:
+		inset 0 6px 14px -3px oklch(0 0 0 / 0.82), inset 0 2px 6px oklch(0 0 0 / 0.65),
+		inset 2px 0 7px -4px oklch(0 0 0 / 0.55), inset -2px 0 7px -4px oklch(0 0 0 / 0.55),
+		inset 0 0 0 1px oklch(0 0 0 / 0.7), 0 -0.5px 0 0.5px oklch(0.5 0.004 265 / 0.3),
+		0 1px 1px 0 oklch(0.55 0.004 265 / 0.35), 0 5px 12px -3px oklch(0 0 0 / 0.4);
+
+	--cap-n-hi: oklch(0.42 0.004 265);
+	--cap-n-mid: oklch(0.3 0.004 265);
+	--cap-n-lo: oklch(0.15 0.004 265);
+	--cap-n-base: oklch(0.24 0.004 265);
+	--cap-face:
+		radial-gradient(circle at 50% 44%, oklch(0.6 0.004 265 / 0.4), transparent 46%),
+		conic-gradient(
+			from 0deg,
+			var(--cap-mid) 0deg,
+			var(--cap-lo) 45deg,
+			var(--cap-mid) 90deg,
+			var(--cap-hi) 135deg,
+			var(--cap-mid) 180deg,
+			var(--cap-lo) 225deg,
+			var(--cap-mid) 270deg,
+			var(--cap-hi) 315deg,
+			var(--cap-mid) 360deg
+		),
+		radial-gradient(circle at 50% 50%, var(--cap-base) 0 100%);
+	--cap-texture:
+		radial-gradient(ellipse 70% 52% at 30% 24%, oklch(0.6 0.004 265 / 0.28), transparent 60%),
+		radial-gradient(ellipse 70% 52% at 72% 78%, oklch(0.6 0.004 265 / 0.2), transparent 60%),
+		repeating-conic-gradient(
+			from 0deg,
+			oklch(0.6 0.004 265 / 0.05) 0 1.3deg,
+			oklch(0 0 0 / 0.06) 1.3deg 2.6deg
+		);
+	--cap-shadow:
+		inset 0 1.5px 0 oklch(0.6 0.004 265 / 0.6), inset 0 -1.5px 1px oklch(0 0 0 / 0.62),
+		inset 0 0 0 1px oklch(0 0 0 / 0.5), 0 0 0 1px oklch(0 0 0 / 0.72), 0 2px 2px oklch(0 0 0 / 0.5),
+		0 5px 9px -2px oklch(0 0 0 / 0.5);
+	--cap-shadow-pressed:
+		inset 0 2px 5px oklch(0 0 0 / 0.6), inset 0 1px 0 oklch(0.55 0.004 265 / 0.2),
+		inset 0 0 0 1px oklch(0 0 0 / 0.6), 0 1px 2px oklch(0 0 0 / 0.5);
+	--cap-socket: linear-gradient(135deg, oklch(0.03 0.004 265) 0%, oklch(0.07 0.004 265) 100%);
+	--cap-socket-shadow:
+		inset 1px 1px 3px oklch(0 0 0 / 0.9), inset -1px -1px 1px oklch(0.5 0.004 265 / 0.12),
+		inset 0 0 0 1px oklch(0 0 0 / 0.6);
+	--cap-ink: oklch(0.82 0.004 265);
+	--cap-ink-shadow: 0 1px 0 oklch(0 0 0 / 0.6), 0 -0.5px 0.5px oklch(0.7 0.004 265 / 0.45);
 }
 
 * {

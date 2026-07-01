@@ -6,7 +6,6 @@
 		active = false,
 		idleLabel = 'HOLD TO TALK',
 		activeLabel = 'TRANSMITTING',
-		tone = 'orange',
 		onstart,
 		onstop
 	}: {
@@ -14,12 +13,14 @@
 		active?: boolean;
 		idleLabel?: string;
 		activeLabel?: string;
-		tone?: 'orange' | 'green' | 'blue';
 		onstart: () => void;
 		onstop: () => void;
 	} = $props();
 
 	let pressed = false;
+
+	// Ready = armed (enabled, not yet held): the engraved waveform lights orange.
+	let ready = $derived(!disabled && !active);
 
 	function begin(event: PointerEvent) {
 		if (disabled) return;
@@ -42,15 +43,14 @@
 	<button
 		class="ptt"
 		class:active
+		class:ready
 		{disabled}
-		data-tone={tone}
 		aria-pressed={active}
 		onpointerdown={begin}
 		onpointerup={end}
 		onpointercancel={end}
 	>
-		<span class="ptt-grain" aria-hidden="true"></span>
-		<span class="ptt-sheen" aria-hidden="true"></span>
+		<span class="ptt-texture" aria-hidden="true"></span>
 		<span class="ptt-inner">
 			<span class="ptt-waveform" aria-hidden="true">
 				<span class="wave-line wave-line--edge"></span>
@@ -62,12 +62,12 @@
 				<span class="wave-bar wave-bar--5"></span>
 				<span class="wave-bar wave-bar--6"></span>
 				<span class="wave-bar wave-bar--7"></span>
-				<span class="wave-bar wave-bar--8"></span>
-				<span class="wave-bar wave-bar--9"></span>
-				<span class="wave-bar wave-bar--10"></span>
-				<span class="wave-bar wave-bar--11"></span>
-				<span class="wave-bar wave-bar--12"></span>
-				<span class="wave-bar wave-bar--13"></span>
+				<span class="wave-bar wave-bar--6"></span>
+				<span class="wave-bar wave-bar--5"></span>
+				<span class="wave-bar wave-bar--4"></span>
+				<span class="wave-bar wave-bar--3"></span>
+				<span class="wave-bar wave-bar--2"></span>
+				<span class="wave-bar wave-bar--1"></span>
 				<span class="wave-line wave-line--short"></span>
 				<span class="wave-line wave-line--edge"></span>
 			</span>
@@ -77,155 +77,79 @@
 </div>
 
 <style>
+	/* Blackish round socket the machined cap sits into. */
 	.ptt-mount {
 		display: flex;
+		align-items: center;
+		justify-content: center;
 		width: 100%;
-		padding: 2px 4px 4px 2px;
-		border-radius: 1.28rem;
-		background: linear-gradient(135deg, oklch(0.04 0.005 250) 0%, oklch(0.07 0.005 250) 100%);
-		box-shadow:
-			inset 1px 1px 3px oklch(0 0 0 / 0.85),
-			inset -1px -1px 1px oklch(0.32 0.005 250 / 0.22),
-			inset 0 0 0 1px oklch(0 0 0 / 0.55);
+		padding: clamp(0.5rem, 2vw, 0.85rem) 0 clamp(0.35rem, 1.5vw, 0.7rem);
 	}
 
 	.ptt {
 		position: relative;
-		display: block;
-		flex: 1;
-		width: 100%;
-		min-height: clamp(8.5rem, 26vh, 18rem);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: clamp(9rem, 30vh, 16.5rem);
+		height: clamp(9rem, 30vh, 16.5rem);
 		padding: 0;
 		border: 0;
-		border-radius: 1.15rem;
-		color: oklch(0.18 0.05 50);
-		background: var(--orange-metal-bg);
-		box-shadow: var(--orange-metal-shadow);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		border-radius: 999px;
+		color: var(--cap-ink);
+		background: var(--cap-face);
+		box-shadow:
+			var(--cap-shadow),
+			/* recessed socket seat around the cap */
+			0 0 0 6px oklch(0.06 0.004 250 / 0.55),
+			0 0 0 7px oklch(0.5 0.004 250 / 0.12);
 		touch-action: none;
 		user-select: none;
 		overflow: hidden;
 		transition:
-			transform 80ms ease,
-			box-shadow 80ms ease,
-			background 120ms ease;
+			transform 90ms ease,
+			box-shadow 120ms ease,
+			background 160ms ease,
+			color 160ms ease;
 	}
 
-	.ptt[data-tone='green'] {
-		color: oklch(0.1 0.06 145);
-		background:
-			repeating-linear-gradient(
-				90deg,
-				oklch(1 0 0 / 0.045) 0px,
-				oklch(1 0 0 / 0.045) 1px,
-				transparent 1px,
-				transparent 3px
-			),
-			linear-gradient(
-				145deg,
-				oklch(0.83 0.14 145) 0%,
-				oklch(0.64 0.18 145) 34%,
-				oklch(0.43 0.16 150) 70%,
-				oklch(0.28 0.12 155) 100%
-			);
-		box-shadow:
-			inset 1px 1px 0 oklch(0.96 0.08 145 / 0.88),
-			inset 0 4px 0 -1px oklch(0.88 0.1 145 / 0.78),
-			inset -1px -1px 0 oklch(0.12 0.08 155 / 0.75),
-			inset 0 -4px 0 -1px oklch(0.14 0.09 155 / 0.85),
-			inset 0 0 0 1px oklch(0.35 0.14 150 / 0.9),
-			0 1px 2px oklch(0 0 0 / 0.4),
-			0 0 28px oklch(0.62 0.18 145 / 0.18);
-	}
-
-	.ptt[data-tone='blue'] {
-		color: oklch(0.13 0.05 235);
-		background:
-			repeating-linear-gradient(
-				90deg,
-				oklch(1 0 0 / 0.045) 0px,
-				oklch(1 0 0 / 0.045) 1px,
-				transparent 1px,
-				transparent 3px
-			),
-			linear-gradient(
-				145deg,
-				oklch(0.78 0.1 235) 0%,
-				oklch(0.6 0.13 235) 34%,
-				oklch(0.39 0.12 240) 70%,
-				oklch(0.26 0.1 245) 100%
-			);
-		box-shadow:
-			inset 1px 1px 0 oklch(0.92 0.06 230 / 0.86),
-			inset 0 4px 0 -1px oklch(0.82 0.08 230 / 0.75),
-			inset -1px -1px 0 oklch(0.12 0.07 245 / 0.75),
-			inset 0 -4px 0 -1px oklch(0.13 0.08 245 / 0.85),
-			inset 0 0 0 1px oklch(0.34 0.11 240 / 0.9),
-			0 1px 2px oklch(0 0 0 / 0.4),
-			0 0 28px oklch(0.58 0.13 235 / 0.18);
-	}
-
-	.ptt[data-tone='green'] .ptt-waveform,
-	.ptt[data-tone='blue'] .ptt-waveform {
-		color: currentColor;
-	}
-
-	.ptt-grain {
+	/* Turned-metal micro grain + catchlights. */
+	.ptt-texture {
 		position: absolute;
 		inset: 0;
 		z-index: 1;
 		border-radius: inherit;
 		pointer-events: none;
-		opacity: 0.45;
-		mix-blend-mode: overlay;
-		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' seed='3'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-		background-size: 180px 180px;
-	}
-
-	.ptt::before {
-		content: '';
-		position: absolute;
-		inset: clamp(0.22rem, 0.85vw, 0.42rem);
-		z-index: 2;
-		border-radius: calc(1.15rem - 0.14rem);
-		pointer-events: none;
-		box-shadow:
-			inset 1px 1px 0 oklch(1 0.07 74 / 0.28),
-			inset -1px -1px 0 oklch(0.28 0.12 46 / 0.3);
-	}
-
-	.ptt-sheen {
-		position: absolute;
-		inset: 0;
-		z-index: 2;
-		border-radius: inherit;
-		pointer-events: none;
-		background: var(--orange-metal-sheen);
+		background: var(--cap-texture);
 	}
 
 	.ptt-inner {
 		position: relative;
-		z-index: 3;
+		z-index: 2;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: clamp(0.85rem, 3vw, 1.15rem);
+		gap: clamp(0.7rem, 2.4vw, 1.05rem);
 		width: 100%;
-		min-height: inherit;
-		padding: 1.5rem 1rem;
-		text-shadow: 0 1px 0 oklch(1 0.04 70 / 0.4);
+		padding: 1rem;
 	}
 
+	/* Engraved waveform: bright lower edge + dark upper edge = stamped metal. */
 	.ptt-waveform {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: clamp(0.18rem, 1.1vw, 0.36rem);
-		width: min(88%, 22rem);
-		height: clamp(3.1rem, 11vw, 5.2rem);
-		color: oklch(0.19 0.08 48);
-		filter: drop-shadow(0 1px 0 oklch(1 0.06 74 / 0.36));
+		gap: clamp(0.14rem, 0.9vw, 0.3rem);
+		width: min(72%, 15rem);
+		height: clamp(2.6rem, 9vw, 4.4rem);
+		color: var(--cap-ink);
+		filter:
+			drop-shadow(0 1px 0 oklch(1 0.002 250 / 0.5))
+			drop-shadow(0 -0.5px 0.5px oklch(0.22 0.005 250 / 0.55));
+		transition:
+			color 160ms ease,
+			filter 160ms ease;
 	}
 
 	.wave-bar,
@@ -234,142 +158,94 @@
 		flex: 0 0 auto;
 		border-radius: 999px;
 		background: currentColor;
-		box-shadow:
-			inset 0 1px 0 oklch(0 0 0 / 0.5),
-			0 1px 0 oklch(1 0.07 74 / 0.34),
-			0 -1px 0 oklch(0.27 0.11 46 / 0.52);
 	}
 
 	.wave-line {
-		width: clamp(1rem, 4vw, 1.85rem);
-		height: clamp(0.18rem, 0.8vw, 0.28rem);
-		opacity: 0.82;
+		width: clamp(0.7rem, 2.6vw, 1.3rem);
+		height: clamp(0.16rem, 0.7vw, 0.24rem);
+		opacity: 0.8;
 	}
 
 	.wave-line--short {
-		width: clamp(0.28rem, 1.5vw, 0.54rem);
+		width: clamp(0.24rem, 1.2vw, 0.44rem);
 	}
 
 	.wave-bar {
-		width: clamp(0.28rem, 1.2vw, 0.48rem);
+		width: clamp(0.24rem, 1vw, 0.42rem);
 	}
 
-	.wave-bar--1,
-	.wave-bar--13 {
+	.wave-bar--1 {
 		height: 24%;
 	}
-
-	.wave-bar--2,
-	.wave-bar--12 {
+	.wave-bar--2 {
 		height: 42%;
 	}
-
-	.wave-bar--3,
-	.wave-bar--11 {
+	.wave-bar--3 {
 		height: 58%;
 	}
-
-	.wave-bar--4,
-	.wave-bar--10 {
+	.wave-bar--4 {
 		height: 82%;
 	}
-
-	.wave-bar--5,
-	.wave-bar--9 {
+	.wave-bar--5 {
 		height: 52%;
 	}
-
-	.wave-bar--6,
-	.wave-bar--8 {
+	.wave-bar--6 {
 		height: 68%;
 	}
-
 	.wave-bar--7 {
 		height: 100%;
-		width: clamp(0.34rem, 1.5vw, 0.58rem);
+		width: clamp(0.3rem, 1.2vw, 0.5rem);
 	}
 
+	/* Engraved label. */
 	.label {
-		font-size: clamp(0.76rem, 2.75vw, 1rem);
+		font-family: ui-monospace, 'SF Mono', Menlo, 'Roboto Mono', monospace;
+		font-size: clamp(0.66rem, 2.2vw, 0.82rem);
 		font-weight: 700;
-		letter-spacing: 0.34em;
+		letter-spacing: 0.28em;
+		color: var(--cap-ink);
+		text-shadow: var(--cap-ink-shadow);
 	}
 
-	.ptt:hover:not(:disabled) .ptt-sheen {
-		filter: brightness(1.1);
+	/* Ready (armed): the waveform lights orange while the cap stays steel. */
+	.ptt.ready .ptt-waveform {
+		color: var(--accent-orange);
+		filter:
+			drop-shadow(0 1px 0 oklch(1 0.002 250 / 0.4))
+			drop-shadow(0 0 6px oklch(0.78 0.2 55 / 0.55));
 	}
 
+	.ptt:hover:not(:disabled) {
+		filter: brightness(1.03);
+	}
+
+	/* Transmitting: cap presses in + warms to orange metal with a glow. */
 	.ptt.active {
-		transform: translate(0.5px, 3px);
-		background:
-			repeating-linear-gradient(
-				90deg,
-				oklch(1 0 0 / 0.05) 0px,
-				oklch(1 0 0 / 0.05) 1px,
-				transparent 1px,
-				transparent 3px
-			),
-			linear-gradient(
-				145deg,
-				oklch(0.7 0.18 55) 0%,
-				oklch(0.6 0.2 52) 50%,
-				oklch(0.45 0.21 48) 100%
-			);
+		transform: translateY(2px);
+		color: oklch(0.18 0.05 50);
+		background: var(--cap-warm-face);
 		box-shadow:
-			inset 1px 1px 4px oklch(0 0 0 / 0.55),
-			inset 0 4px 8px oklch(0 0 0 / 0.5),
-			inset -1px -1px 0 oklch(0.5 0.16 55 / 0.3),
-			inset 0 0 0 1px oklch(0.42 0.16 50 / 0.85),
-			0 0 0 oklch(0 0 0 / 0),
-			0 0 36px oklch(0.78 0.21 55 / 0.5);
+			var(--cap-warm-shadow),
+			0 0 0 6px oklch(0.06 0.004 250 / 0.55),
+			0 0 0 7px oklch(0.5 0.16 55 / 0.18),
+			0 0 40px oklch(0.78 0.21 55 / 0.4);
 	}
 
-	.ptt[data-tone='green'].active {
-		background:
-			repeating-linear-gradient(
-				90deg,
-				oklch(1 0 0 / 0.05) 0px,
-				oklch(1 0 0 / 0.05) 1px,
-				transparent 1px,
-				transparent 3px
-			),
-			linear-gradient(145deg, oklch(0.62 0.18 145), oklch(0.28 0.13 155));
-		box-shadow:
-			inset 1px 1px 4px oklch(0 0 0 / 0.55),
-			inset 0 4px 8px oklch(0 0 0 / 0.5),
-			inset 0 0 0 1px oklch(0.32 0.14 150 / 0.9),
-			0 0 36px oklch(0.66 0.18 145 / 0.4);
+	.ptt.active .ptt-waveform {
+		color: oklch(0.2 0.08 48);
+		filter:
+			drop-shadow(0 1px 0 oklch(1 0.06 74 / 0.45))
+			drop-shadow(0 -1px 0 oklch(0.27 0.11 46 / 0.5));
 	}
 
-	.ptt[data-tone='blue'].active {
-		background:
-			repeating-linear-gradient(
-				90deg,
-				oklch(1 0 0 / 0.05) 0px,
-				oklch(1 0 0 / 0.05) 1px,
-				transparent 1px,
-				transparent 3px
-			),
-			linear-gradient(145deg, oklch(0.58 0.13 235), oklch(0.26 0.1 245));
-		box-shadow:
-			inset 1px 1px 4px oklch(0 0 0 / 0.55),
-			inset 0 4px 8px oklch(0 0 0 / 0.5),
-			inset 0 0 0 1px oklch(0.32 0.11 240 / 0.9),
-			0 0 36px oklch(0.62 0.14 235 / 0.38);
-	}
-
-	.ptt.active .ptt-sheen {
-		opacity: 0.55;
-		background: radial-gradient(
-			ellipse 70% 50% at 50% 50%,
-			oklch(1 0.06 70 / 0.5) 0%,
-			transparent 70%
-		);
+	.ptt.active .label {
+		color: oklch(0.22 0.07 48);
+		text-shadow: 0 1px 0 oklch(1 0.06 74 / 0.4);
 	}
 
 	.ptt:disabled {
 		cursor: not-allowed;
-		opacity: 0.45;
-		filter: saturate(0.55);
+		opacity: 0.55;
+		filter: saturate(0.6);
 	}
 </style>
