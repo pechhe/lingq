@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Check, Search, X } from 'lucide-svelte';
+	import { Search, X } from 'lucide-svelte';
 	import { getLanguageLabel, languages, type LanguageCode } from '$lib/constants/languages';
 	import { playClick } from '$lib/realtime/clickSound';
 
@@ -57,17 +57,17 @@
 
 {#if open}
 	<div
-		class="backdrop"
-		role="presentation"
-		onclick={close}
+		class="overlay"
+		class:amber={tone === 'amber'}
+		role="dialog"
+		aria-modal="true"
+		aria-label={label}
 		onkeydown={(event) => {
 			if (event.key === 'Escape') close();
 		}}
-	></div>
-
-	<div class="sheet" class:amber={tone === 'amber'} role="dialog" aria-modal="true" aria-label={label}>
+	>
 		<header>
-			<span class="title mono">{label}</span>
+			<span class="title">{label}</span>
 			<button
 				class="close"
 				type="button"
@@ -75,7 +75,7 @@
 				onpointerdown={() => playClick('down')}
 				onclick={close}
 			>
-				<X size={16} />
+				<X size={15} />
 			</button>
 		</header>
 
@@ -87,7 +87,7 @@
 
 		<div class="body">
 			{#if filteredLanguages.length === 0}
-				<p class="note mono">No languages found.</p>
+				<p class="note">No languages found.</p>
 			{:else}
 				<ul>
 					{#each filteredLanguages as language (language.code)}
@@ -99,12 +99,9 @@
 								onpointerdown={() => playClick('down')}
 								onclick={() => choose(language.code)}
 							>
-								<span class="dot" aria-hidden="true"></span>
+								<span class="marker" aria-hidden="true">{value === language.code ? '>' : ' '}</span>
 								<span class="name">{language.label}</span>
-								<span class="code mono">{language.code}</span>
-								{#if value === language.code}
-									<Check size={15} />
-								{/if}
+								<span class="code">{language.code}</span>
 							</button>
 						</li>
 					{/each}
@@ -192,50 +189,49 @@
 		transform: translateY(-65%) rotate(45deg);
 	}
 
-	.backdrop {
-		position: fixed;
+	/* In-screen CRT overlay — confined to the phosphor screen, painted below
+	   the scanline/vignette layers so it glows like the rest of the readout. */
+	.overlay {
+		position: absolute;
 		inset: 0;
-		z-index: 50;
-		background: oklch(0 0 0 / 0.6);
-		backdrop-filter: blur(2px);
-	}
-
-	.sheet {
-		position: fixed;
-		left: 50%;
-		bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(6.5rem, 16svh, 8.5rem));
-		transform: translateX(-50%);
-		z-index: 51;
+		z-index: 20;
 		display: grid;
 		grid-template-rows: auto auto minmax(0, 1fr);
-		gap: 0.75rem;
-		width: min(88vw, 22rem);
-		max-height: min(30rem, 58svh);
-		overflow: hidden;
-		border-radius: 1rem;
-		background: linear-gradient(180deg, var(--device-body-top), var(--device-body-bottom));
-		padding: 1rem;
-		box-shadow:
-			0 1px 0 var(--device-edge-highlight) inset,
-			0 0 0 1px oklch(0.32 0.005 250 / 0.5),
-			0 24px 60px -12px oklch(0 0 0 / 0.7);
+		gap: 0.6rem;
+		padding: clamp(0.85rem, 2vw, 1.15rem);
+		background: linear-gradient(180deg, oklch(0.1 0.02 145 / 0.98), oklch(0.06 0.012 145 / 0.99));
+		font-family: ui-monospace, 'SF Mono', Menlo, 'Roboto Mono', monospace;
+		color: var(--accent);
+		animation: overlay-in 120ms ease-out;
 		--accent: var(--screen-green);
 		--accent-dim: var(--screen-green-dim);
-		--selected-bg: oklch(0.22 0.04 145);
+		--accent-line: oklch(0.5 0.13 145 / 0.4);
+		--accent-wash: oklch(0.5 0.13 145 / 0.12);
 	}
 
-	.sheet.amber {
+	.overlay.amber {
+		background: linear-gradient(180deg, oklch(0.11 0.02 70 / 0.98), oklch(0.06 0.012 70 / 0.99));
 		--accent: var(--screen-amber);
 		--accent-dim: var(--screen-amber-dim);
-		--selected-bg: oklch(0.22 0.04 60);
+		--accent-line: oklch(0.5 0.1 70 / 0.4);
+		--accent-wash: oklch(0.5 0.1 70 / 0.12);
+	}
+
+	@keyframes overlay-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
 	}
 
 	header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding-bottom: 0.6rem;
-		border-bottom: 1px dashed oklch(0.4 0.005 250 / 0.35);
+		padding-bottom: 0.5rem;
+		border-bottom: 1px dashed var(--accent-line);
 	}
 
 	.title {
@@ -249,26 +245,27 @@
 	.close {
 		display: grid;
 		place-items: center;
-		width: 1.8rem;
-		height: 1.8rem;
-		border: 0;
-		border-radius: 0.4rem;
-		background: oklch(0.22 0.005 250);
-		color: var(--ink-muted);
-		box-shadow: inset 0 1px 0 oklch(0.4 0.005 250 / 0.5);
+		width: 1.7rem;
+		height: 1.7rem;
+		border: 1px solid var(--accent-line);
+		border-radius: 0.3rem;
+		background: transparent;
+		color: var(--accent);
+	}
+
+	.close:hover {
+		background: var(--accent-wash);
 	}
 
 	.search {
 		display: flex;
 		align-items: center;
 		gap: 0.55rem;
-		padding: 0.65rem 0.75rem;
-		border-radius: 0.5rem;
-		background: oklch(0.13 0.005 250);
+		padding: 0.6rem 0.7rem;
+		border: 1px solid var(--accent-line);
+		border-radius: 0.35rem;
+		background: oklch(0 0 0 / 0.35);
 		color: var(--accent-dim);
-		box-shadow:
-			inset 0 1px 0 oklch(0.34 0.005 250 / 0.3),
-			0 0 0 1px oklch(0.36 0.005 250 / 0.35);
 	}
 
 	.search input {
@@ -277,14 +274,16 @@
 		border: 0;
 		outline: 0;
 		background: transparent;
-		color: var(--ink);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		color: var(--accent);
+		caret-color: var(--accent);
+		font-family: inherit;
 		font-size: 0.82rem;
+		letter-spacing: 0.02em;
 	}
 
 	.search input::placeholder {
-		color: var(--ink-muted);
-		opacity: 0.75;
+		color: var(--accent-dim);
+		opacity: 0.6;
 	}
 
 	.body {
@@ -292,55 +291,48 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		padding-right: 0.1rem;
-		border-radius: 0.65rem;
 	}
 
 	.body ul {
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		display: grid;
-		gap: 0.35rem;
 	}
 
 	.language {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
+		gap: 0.55rem;
 		width: 100%;
-		min-height: 2.75rem;
-		padding: 0.65rem 0.75rem;
+		min-height: 2.6rem;
+		padding: 0.55rem 0.4rem;
 		border: 0;
-		border-radius: 0.5rem;
-		background: oklch(0.18 0.005 250);
-		color: var(--ink);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.82rem;
+		border-bottom: 1px solid oklch(0.4 0.1 145 / 0.12);
+		background: transparent;
+		color: var(--accent-dim);
+		font-family: inherit;
+		font-size: 0.86rem;
+		letter-spacing: 0.02em;
 		text-align: left;
-		box-shadow: inset 0 1px 0 oklch(0.34 0.005 250 / 0.4);
 	}
 
 	.language:hover {
-		filter: brightness(1.1);
+		color: var(--accent);
+		background: var(--accent-wash);
 	}
 
 	.language.selected {
-		background: var(--selected-bg);
 		color: var(--accent);
+		background: var(--accent-wash);
 	}
 
-	.dot {
-		width: 0.55rem;
-		height: 0.55rem;
-		border-radius: 999px;
-		background: var(--led-dim);
-		box-shadow: inset 0 0 1px oklch(0 0 0 / 0.5);
+	.marker {
 		flex-shrink: 0;
-	}
-
-	.language.selected .dot {
-		background: var(--led-orange);
-		box-shadow: 0 0 6px var(--led-orange-glow);
+		width: 1ch;
+		color: var(--accent);
+		font-weight: 700;
+		text-align: center;
+		white-space: pre;
 	}
 
 	.name {
@@ -353,17 +345,18 @@
 
 	.code {
 		flex-shrink: 0;
-		font-size: 0.6rem;
+		font-size: 0.62rem;
 		font-weight: 700;
-		letter-spacing: 0.12em;
-		color: var(--ink-muted);
+		letter-spacing: 0.14em;
+		color: var(--accent-dim);
+		opacity: 0.7;
 		text-transform: uppercase;
 	}
 
 	.note {
 		margin: 0;
-		font-size: 0.78rem;
-		color: var(--ink-muted);
+		font-size: 0.8rem;
+		color: var(--accent-dim);
 		line-height: 1.45;
 	}
 
