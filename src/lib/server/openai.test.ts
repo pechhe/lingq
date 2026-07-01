@@ -19,6 +19,12 @@ describe('buildTranslationClientSecretRequest', () => {
 		expect(body).not.toHaveProperty('session.instructions');
 	});
 
+	it('supports far-field noise reduction for shared-phone capture', () => {
+		const body = buildTranslationClientSecretRequest('es', 'far_field');
+
+		expect(body.session.audio.input.noise_reduction).toEqual({ type: 'far_field' });
+	});
+
 	it('normalises Brazilian Portuguese to OpenAI translation language code', () => {
 		const body = buildTranslationClientSecretRequest('pt-BR');
 

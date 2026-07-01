@@ -1,7 +1,12 @@
 import { getOpenAITranslationLanguage } from '$lib/constants/languages';
 import { getOpenAIEnv } from './env';
 
-export function buildTranslationClientSecretRequest(targetLanguage: string) {
+export type NoiseReductionType = 'near_field' | 'far_field';
+
+export function buildTranslationClientSecretRequest(
+	targetLanguage: string,
+	noiseReduction: NoiseReductionType = 'near_field'
+) {
 	return {
 		expires_after: {
 			anchor: 'created_at',
@@ -11,7 +16,7 @@ export function buildTranslationClientSecretRequest(targetLanguage: string) {
 			model: 'gpt-realtime-translate',
 			audio: {
 				input: {
-					noise_reduction: { type: 'near_field' }
+					noise_reduction: { type: noiseReduction }
 				},
 				output: {
 					language: getOpenAITranslationLanguage(targetLanguage)
@@ -24,6 +29,7 @@ export function buildTranslationClientSecretRequest(targetLanguage: string) {
 export async function createRealtimeClientSecret(input: {
 	targetLanguage: string;
 	openaiApiKey?: string;
+	noiseReduction?: NoiseReductionType;
 }) {
 	const response = await fetch('https://api.openai.com/v1/realtime/translations/client_secrets', {
 		method: 'POST',
@@ -31,7 +37,9 @@ export async function createRealtimeClientSecret(input: {
 			Authorization: `Bearer ${input.openaiApiKey || getOpenAIEnv().openaiApiKey}`,
 			'Content-Type': 'application/json'
 		},
-		body: JSON.stringify(buildTranslationClientSecretRequest(input.targetLanguage))
+		body: JSON.stringify(
+			buildTranslationClientSecretRequest(input.targetLanguage, input.noiseReduction)
+		)
 	});
 
 	if (!response.ok) {

@@ -63,7 +63,10 @@ export const POST: RequestHandler = async ({ cookies, locals, request }) => {
 		});
 		const token = await createRealtimeClientSecret({
 			targetLanguage: body.targetLanguage,
-			openaiApiKey
+			openaiApiKey,
+			// One-phone mode shares a single handset between two speakers, so the
+			// mic is further from the mouth than a normal close-talking phone.
+			noiseReduction: 'far_field'
 		});
 		return json({ ...token, usageSessionId: sessionId });
 	} catch (cause) {

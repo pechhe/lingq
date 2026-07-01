@@ -4,36 +4,52 @@ export function getStereoPanValue(mode: OutputPanMode) {
 	return mode === 'left' ? -1 : mode === 'right' ? 1 : 0;
 }
 
+let sharedAudioContext: AudioContext | undefined;
+
+async function getSharedAudioContext(): Promise<AudioContext> {
+	const AudioContextCtor = window.AudioContext ?? window.webkitAudioContext;
+	if (!AudioContextCtor) {
+		throw new Error('Web Audio is not available in this browser.');
+	}
+
+	if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+		sharedAudioContext = new AudioContextCtor();
+	}
+	if (sharedAudioContext.state === 'suspended') {
+		await sharedAudioContext.resume();
+	}
+	return sharedAudioContext;
+}
+
 export class StereoOutputRouter {
-	#audioContext?: AudioContext;
 	#source?: MediaStreamAudioSourceNode;
 	#panner?: StereoPannerNode;
+	#keepAliveElement?: HTMLAudioElement;
 	#fallbackElement?: HTMLAudioElement;
 
 	async unlock() {
-		const AudioContextCtor = window.AudioContext ?? window.webkitAudioContext;
-		if (!AudioContextCtor) {
-			throw new Error('Web Audio is not available in this browser.');
-		}
-
-		this.#audioContext ??= new AudioContextCtor();
-		if (this.#audioContext.state === 'suspended') {
-			await this.#audioContext.resume();
-		}
+		await getSharedAudioContext();
 	}
 
 	async play(stream: MediaStream, mode: OutputPanMode) {
 		this.stop();
-		await this.unlock();
-		const audioContext = this.#audioContext;
-		if (!audioContext) return;
+		const audioContext = await getSharedAudioContext();
+
+		// Chromium bug: audio from a remote WebRTC MediaStream is silent inside
+		// a Web Audio graph unless the stream is also attached to a media
+		// element. Keep a muted element alive as a sink (crbug.com/121673).
+		const keepAlive = new Audio();
+		keepAlive.muted = true;
+		keepAlive.setAttribute('playsinline', '');
+		keepAlive.srcObject = stream;
+		void keepAlive.play().catch(() => {});
+		this.#keepAliveElement = keepAlive;
 
 		const source = audioContext.createMediaStreamSource(stream);
 		const panner = audioContext.createStereoPanner();
 		panner.pan.value = getStereoPanValue(mode);
 		source.connect(panner).connect(audioContext.destination);
 
-		this.#audioContext = audioContext;
 		this.#source = source;
 		this.#panner = panner;
 	}
@@ -56,18 +72,18 @@ export class StereoOutputRouter {
 	stop() {
 		this.#source?.disconnect();
 		this.#panner?.disconnect();
+		this.#keepAliveElement?.pause();
+		if (this.#keepAliveElement) this.#keepAliveElement.srcObject = null;
 		this.#fallbackElement?.pause();
 		if (this.#fallbackElement) this.#fallbackElement.srcObject = null;
 		this.#source = undefined;
 		this.#panner = undefined;
+		this.#keepAliveElement = undefined;
 		this.#fallbackElement = undefined;
 	}
 
 	close() {
 		this.stop();
-		const audioContext = this.#audioContext;
-		this.#audioContext = undefined;
-		void audioContext?.close().catch(() => {});
 	}
 }
 

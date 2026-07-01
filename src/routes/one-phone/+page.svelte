@@ -62,6 +62,7 @@
 	let error = $state('');
 	let splitOutput = $state(true);
 	let activeSide = $state<Side | undefined>(undefined);
+	let pressedSide: Side | undefined;
 	let translatedStream = $state<MediaStream | undefined>(undefined);
 	let diagnostics = $state<DiagnosticsSnapshot>({
 		me: createDiagnosticState(),
@@ -141,15 +142,20 @@
 		if (!canSpeak || !micStream) return;
 		logDiagnostic('press:start', { side });
 		clearIdleDisconnectTimer();
+		pressedSide = side;
 		activeSide = side;
 		error = '';
 		uiState = side === 'me' ? 'speaking_me' : 'speaking_them';
-		detail = '';
+		detail = translationClients.has(side) ? '' : 'Connecting translation…';
 
 		const currentNonce = sessionNonce;
 		try {
 			await connectSideTranslation(side, currentNonce);
 			if (currentNonce !== sessionNonce) return;
+			// The user may have released the button while the channel was still
+			// connecting — never open the mic after release.
+			if (pressedSide !== side) return;
+			detail = '';
 			setActiveInputSide(side);
 		} catch (cause) {
 			logDiagnostic('press:error', { side, error: errorMessage(cause) });
@@ -162,6 +168,7 @@
 	}
 
 	function endSide(side: Side) {
+		if (pressedSide === side) pressedSide = undefined;
 		if (activeSide !== side || !micStream) return;
 		logDiagnostic('press:end', { side });
 		muteTranslationTracks();
@@ -184,6 +191,7 @@
 	function resetSession() {
 		logDiagnostic('reset');
 		clearIdleDisconnectTimer();
+		pressedSide = undefined;
 		sessionNonce += 1;
 		diagnosticSessionId = crypto.randomUUID();
 		muteTranslationTracks();
@@ -664,9 +672,9 @@
 						<AudioVisualizer stream={vizStream} color={vizColor} />
 							<span class="viz-label mono crt-fringe">
 								{#if uiState === 'speaking_me'}
-									▶ TX · {meButtonLabel}
+									▶ TX · {meButtonLabel}{sideConnecting ? ' · CONNECTING…' : ''}
 								{:else if uiState === 'speaking_them'}
-									▶ TX · {themButtonLabel}
+									▶ TX · {themButtonLabel}{sideConnecting ? ' · CONNECTING…' : ''}
 								{:else if uiState === 'receiving'}
 									◀ RX · {activeOutputMode.toUpperCase()}
 								{:else}

@@ -34,6 +34,19 @@ export function getTranslationOutputState(eventType: string): TranslationOutputS
 	return undefined;
 }
 
+export function formatTokenError(body: string, status: number) {
+	try {
+		const parsed = JSON.parse(body) as { message?: unknown; error?: { message?: unknown } };
+		const message = parsed?.message ?? parsed?.error?.message;
+		if (typeof message === 'string' && message) {
+			return `Could not start translation (${status}): ${message}`;
+		}
+	} catch {
+		// not JSON — fall through
+	}
+	return body || `Could not start translation (${status})`;
+}
+
 function getStoredOpenAIKey() {
 	try {
 		return localStorage.getItem('lingk:openai-api-key') || undefined;
@@ -73,7 +86,7 @@ export class OpenAIRealtimeClient {
 		});
 
 		if (!tokenResponse.ok) {
-			throw new Error(await tokenResponse.text());
+			throw new Error(formatTokenError(await tokenResponse.text(), tokenResponse.status));
 		}
 
 		this.#options.onRealtimeEvent?.(`token:${tokenResponse.status}`);
