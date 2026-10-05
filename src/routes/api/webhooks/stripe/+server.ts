@@ -5,11 +5,31 @@ import { upsertSubscription, type PlanId } from '$lib/server/billing';
 import { getStripeEnv } from '$lib/server/env';
 import type { RequestHandler } from './$types';
 
-function normaliseStatus(status: Stripe.Subscription.Status) {
-	if (status === 'canceled') return 'cancelled';
-	if (status === 'incomplete_expired') return 'cancelled';
-	if (status === 'paused') return 'paused';
-	return status;
+type SubscriptionStatus =
+	| 'active'
+	| 'cancelled'
+	| 'incomplete'
+	| 'past_due'
+	| 'paused'
+	| 'trialing'
+	| 'unpaid';
+
+function normaliseStatus(status: Stripe.Subscription.Status): SubscriptionStatus {
+	switch (status) {
+		case 'canceled':
+		case 'incomplete_expired':
+			return 'cancelled';
+		case 'active':
+		case 'incomplete':
+		case 'past_due':
+		case 'paused':
+		case 'trialing':
+		case 'unpaid':
+			return status as SubscriptionStatus;
+		default:
+			// Stripe's status union is open-ended; treat unknown states as not entitled.
+			return 'incomplete';
+	}
 }
 
 function getPlanId(subscription: Stripe.Subscription): PlanId | null {
