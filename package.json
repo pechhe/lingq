@@ -20,38 +20,39 @@
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.1",
-		"@sveltejs/adapter-vercel": "^6.3.3",
-		"@sveltejs/kit": "^2.57.0",
-		"@sveltejs/vite-plugin-svelte": "^7.0.0",
-		"@tailwindcss/vite": "^4.2.2",
-		"@types/node": "^24",
+		"@sveltejs/adapter-vercel": "^6.3.4",
+		"@sveltejs/kit": "^2.70.3",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"@tailwindcss/vite": "^4.3.3",
+		"@types/node": "^26.6.4",
 		"@types/qrcode": "^1.5.6",
-		"sv-agentation": "^0.3.1",
-		"svelte": "^5.55.2",
-		"svelte-check": "^4.4.6",
-		"tailwindcss": "^4.2.2",
-		"typescript": "^6.0.2",
-		"vite": "^8.0.7",
-		"vite-plus": "^0.1.20"
+		"sv-agentation": "^0.4.0",
+		"svelte": "^5.57.1",
+		"svelte-check": "^4.7.6",
+		"tailwindcss": "^4.3.3",
+		"typescript": "^6.0.3",
+		"vite": "npm:@voidzero-dev/vite-plus-core@^1.0.0",
+		"vite-plus": "^1.0.0"
 	},
 	"dependencies": {
-		"@better-auth/passkey": "1.6.9",
-		"@convex-dev/better-auth": "0.12.2",
-		"@mmailaender/convex-better-auth-svelte": "0.7.4",
-		"@mmailaender/convex-svelte": "0.19.0",
-		"better-auth": "1.6.9",
-		"convex": "^1.37.0",
-		"livekit-client": "^2.18.9",
-		"livekit-server-sdk": "^2.15.2",
+		"@better-auth/passkey": "1.6.33",
+		"@convex-dev/better-auth": "0.12.5",
+		"@mmailaender/convex-better-auth-svelte": "0.9.0",
+		"@mmailaender/convex-svelte": "0.19.1",
+		"better-auth": "1.6.33",
+		"convex": "^1.46.0",
+		"livekit-client": "^2.22.3",
+		"livekit-server-sdk": "^2.19.1",
 		"lucide-svelte": "^1.0.1",
 		"qrcode": "^1.5.4",
-		"stripe": "^22.1.1",
-		"valibot": "^1.4.0"
+		"stripe": "^23.0.0",
+		"valibot": "^1.5.0"
 	},
 	"overrides": {
 		"@lucide/svelte": "npm:lucide-svelte@^1.0.1",
 		"sv-agentation": {
 			"@lucide/svelte": "npm:lucide-svelte@^1.0.1"
-		}
+		},
+		"vite": "npm:@voidzero-dev/vite-plus-core@^1.0.0"
 	}
 }
